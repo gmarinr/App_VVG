@@ -1,0 +1,76 @@
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px calc(8px) 4px;
+  padding-top: max(8px, env(safe-area-inset-top));
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(40, 40, 80, 0.06);
+
+  .back ion-icon { font-size: 22px; }
+  .profile { display: flex; align-items: center; gap: 10px; cursor: pointer; flex: 1; }
+  .group-avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--ion-color-primary), var(--ion-color-secondary));
+    display: flex; align-items: center; justify-content: center;
+    ion-icon { color: #fff; font-size: 20px; }
+  }
+  .profile-text { display: flex; flex-direction: column; }
+  .profile-text strong { font-weight: 600; line-height: 1.1; }
+  .profile-text span { font-size: 0.72rem; color: var(--ion-color-secondary); }
+}
+
+.chat-bg { --background: #eceef5; }
+
+.day-sep {
+  text-align: center;
+  margin: 14px 0;
+  span {
+    background: rgba(138, 141, 159, 0.2);
+    color: #5b5d6b;
+    font-size: 0.72rem;
+    padding: 3px 12px;
+    border-radius: 999px;
+  }
+}
+
+.msg-line {
+  display: flex;
+  margin-bottom: 8px;
+  &.mine { justify-content: flex-end; }
+
+  .bubble {
+    max-width: 76%;
+    background: #fff;
+    border-radius: 14px 14px 14px 4px;
+    padding: 8px 12px 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+    .author { font-size: 0.7rem; font-weight: 700; color: var(--ion-color-primary); margin-bottom: 2px; }
+    .text { font-size: 0.92rem; color: #2b2d3a; }
+    .time { font-size: 0.62rem; color: var(--vvg-muted); align-self: flex-end; margin-top: 2px; }
+  }
+  &.mine .bubble {
+    background: var(--ion-color-primary);
+    border-radius: 14px 14px 4px 14px;
+    .text { color: #fff; }
+    .time { color: rgba(255, 255, 255, 0.7); }
+  }
+}
+
+.empty { text-align: center; padding-top: 40px; }
+
+.composer {
+  --background: #fff;
+  display: flex;
+  align-items: center;
+  .composer-input {
+    --background: #f4f5fa;
+    --padding-start: 14px;
+    --padding-end: 14px;
+    border-radius: 999px;
+    margin: 6px 0 6px 12px;
+  }
+  .send-btn ion-icon { color: var(--ion-color-primary); }
+}

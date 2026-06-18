@@ -1,0 +1,42 @@
+.vvg-logo {
+  font-weight: 800;
+  font-size: 1.2rem;
+  background: linear-gradient(135deg, var(--ion-color-primary), var(--ion-color-secondary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin-left: 16px;
+}
+
+.current-card {
+  background: linear-gradient(160deg, #2b2d3a, #3a3d52);
+  color: #fff;
+  border-radius: var(--vvg-card-radius);
+  padding: 18px;
+  box-shadow: var(--vvg-shadow);
+  cursor: pointer;
+
+  .current-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .badge {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+  }
+  h2 { margin: 12px 0 4px; font-weight: 700; }
+  .desc { color: rgba(255, 255, 255, 0.75) !important; margin: 0 0 4px; }
+  .small { color: rgba(255, 255, 255, 0.6) !important; font-size: 0.78rem; margin: 0; }
+
+  app-bar-chart .bar-val, app-bar-chart .bar-label { color: rgba(255, 255, 255, 0.7) !important; }
+}
+
+.empty {
+  text-align: center;
+  color: var(--vvg-muted);
+  ion-icon { font-size: 38px; display: block; margin: 0 auto 8px; }
+}
+

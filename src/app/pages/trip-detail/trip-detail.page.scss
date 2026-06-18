@@ -1,0 +1,89 @@
+.totals {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 6px;
+  .total-box {
+    flex: 1;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: var(--vvg-shadow);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    span { font-size: 0.75rem; }
+    strong { font-size: 1.3rem; color: #2b2d3a; }
+    &.accent strong { color: var(--ion-color-primary); }
+  }
+}
+
+.small { font-size: 0.74rem; }
+
+.exp {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  padding: 12px 14px;
+  .exp-body { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+  .exp-body strong { font-weight: 600; }
+  .exp-amounts { display: flex; flex-direction: column; align-items: flex-end; }
+  .monto { font-weight: 700; color: #2b2d3a; }
+  .parte { font-size: 0.7rem; }
+}
+
+.settle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  .flow { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; font-size: 0.85rem; }
+  .flow .vvg-neg { font-size: 1.05rem; }
+}
+
+.bal, .member {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  .bal-body { flex: 1; display: flex; flex-direction: column; }
+}
+
+.upload {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 22px;
+  cursor: pointer;
+  color: var(--ion-color-primary);
+  border: 2px dashed rgba(91, 95, 199, 0.3);
+  box-shadow: none;
+  ion-icon { font-size: 32px; }
+  span { font-size: 0.85rem; }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  .photo {
+    padding-top: 100%;
+    background-size: cover;
+    background-position: center;
+    border-radius: 10px;
+  }
+}
+
+.finish { margin-bottom: 8px; }
+.settings-list { border-radius: 14px; }
+
+.empty {
+  text-align: center;
+  color: var(--vvg-muted);
+  padding-top: 40px;
+  ion-icon { font-size: 46px; display: block; margin: 0 auto 12px; }
+}

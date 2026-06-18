@@ -1,0 +1,46 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title>Historial</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" class="ion-padding">
+  <ion-segment [value]="filtro" (ionChange)="onFiltro($event)" class="pills">
+    <ion-segment-button value="viaje">
+      <ion-icon name="airplane-outline"></ion-icon>
+      <ion-label>Viajes</ion-label>
+    </ion-segment-button>
+    <ion-segment-button value="salida">
+      <ion-icon name="beer-outline"></ion-icon>
+      <ion-label>Salidas</ion-label>
+    </ion-segment-button>
+  </ion-segment>
+
+  <div *ngIf="items.length; else vacio">
+    <div class="trip-card vvg-card" *ngFor="let t of items" (click)="open(t)">
+      <div class="trip-head">
+        <h3>{{ t.nombre }}</h3>
+        <span class="estado" [class.fin]="t.finalizado">{{ t.finalizado ? 'Finalizado' : 'Activo' }}</span>
+      </div>
+      <p class="vvg-muted desc">{{ t.descripcion }}</p>
+      <div class="trip-foot">
+        <div>
+          <span class="vvg-muted small">Gasto total</span>
+          <span class="total">{{ total(t) | money }}</span>
+        </div>
+        <div class="parte">
+          <span class="vvg-muted small">Tu parte</span>
+          <span>{{ tuParte(t) | money }}</span>
+        </div>
+        <ion-icon name="chevron-forward"></ion-icon>
+      </div>
+    </div>
+  </div>
+
+  <ng-template #vacio>
+    <div class="empty">
+      <ion-icon [name]="filtro === 'viaje' ? 'airplane-outline' : 'beer-outline'"></ion-icon>
+      <p>No tienes {{ filtro === 'viaje' ? 'viajes' : 'salidas' }} registrados.</p>
+    </div>
+  </ng-template>
+</ion-content>

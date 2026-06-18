@@ -1,0 +1,38 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start"><ion-back-button defaultHref="/tabs/cuenta"></ion-back-button></ion-buttons>
+    <ion-title>Perfil</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" class="ion-padding" *ngIf="user as u">
+  <div class="profile-head vvg-card">
+    <app-avatar [user]="u" [size]="84"></app-avatar>
+    <h2>{{ u.alias }}</h2>
+    <p class="vvg-muted">{{ u.nombre }}</p>
+    <p class="bio" *ngIf="u.descripcion">{{ u.descripcion }}</p>
+
+    <div class="actions">
+      <ion-button (click)="mensaje()">
+        <ion-icon name="chatbubbles-outline" slot="start"></ion-icon> Mensaje
+      </ion-button>
+      <ion-button fill="outline" *ngIf="!esAmigo" (click)="agregar()">
+        <ion-icon name="person-add" slot="start"></ion-icon> Agregar
+      </ion-button>
+      <span class="amigo-tag" *ngIf="esAmigo">
+        <ion-icon name="checkmark-circle"></ion-icon> Amigos
+      </span>
+    </div>
+  </div>
+
+  <h3 class="vvg-section-title">Amigos ({{ amigos.length }})</h3>
+  <div class="vvg-hscroll friends" *ngIf="amigos.length; else sinAmigos">
+    <div class="friend" *ngFor="let f of amigos">
+      <app-avatar [user]="f" [size]="64"></app-avatar>
+      <span>{{ f.alias }}</span>
+    </div>
+  </div>
+  <ng-template #sinAmigos>
+    <p class="vvg-muted">Sin amigos para mostrar.</p>
+  </ng-template>
+</ion-content>

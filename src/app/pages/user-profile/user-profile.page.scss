@@ -1,0 +1,39 @@
+.profile-head {
+  text-align: center;
+  padding: 24px;
+  margin-bottom: 8px;
+  h2 { margin: 12px 0 2px; font-weight: 800; }
+  .bio { margin: 10px 0 0; color: #2b2d3a; }
+  .actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .amigo-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--ion-color-success);
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+}
+
+.friends .friend {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 72px;
+  span {
+    font-size: 0.74rem;
+    font-weight: 500;
+    max-width: 72px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

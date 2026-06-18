@@ -1,0 +1,43 @@
+.pills { margin-bottom: 14px; }
+
+.chat-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 6px;
+  border-bottom: 1px solid rgba(138, 141, 159, 0.12);
+  cursor: pointer;
+
+  .group-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--ion-color-primary), var(--ion-color-secondary));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    ion-icon { color: #fff; font-size: 24px; }
+  }
+
+  .chat-body { flex: 1; min-width: 0; }
+  .chat-top { display: flex; justify-content: space-between; align-items: baseline; }
+  .chat-top strong { font-weight: 600; }
+  .hora { font-size: 0.72rem; }
+  .preview {
+    display: block;
+    font-size: 0.84rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+  }
+}
+
+.empty {
+  text-align: center;
+  color: var(--vvg-muted);
+  padding-top: 50px;
+  ion-icon { font-size: 50px; display: block; margin: 0 auto 12px; }
+  p { margin-bottom: 14px; }
+}

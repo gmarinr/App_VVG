@@ -1,0 +1,65 @@
+.profile-head {
+  text-align: center;
+  padding: 24px;
+  margin-bottom: 14px;
+  h2 {
+    margin: 12px 0 2px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    ion-icon { font-size: 18px; color: var(--ion-color-primary); }
+  }
+}
+
+.bio {
+  margin-bottom: 6px;
+  cursor: pointer;
+  .bio-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    span { font-size: 0.8rem; font-weight: 600; }
+    ion-icon { color: var(--ion-color-primary); }
+  }
+  p { margin: 0; color: #2b2d3a; }
+}
+
+.amigos-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.friends {
+  .friend {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    min-width: 72px;
+    span {
+      font-size: 0.74rem;
+      font-weight: 500;
+      max-width: 72px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    &.add .add-circle {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      border: 2px dashed rgba(91, 95, 199, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      ion-icon { font-size: 26px; color: var(--ion-color-primary); }
+    }
+  }
+}
+
+.reset { margin-top: 18px; font-size: 0.85rem; }

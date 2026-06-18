@@ -1,0 +1,43 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start"><ion-back-button [defaultHref]="'/viaje/' + tripId"></ion-back-button></ion-buttons>
+    <ion-title>Nuevo gasto</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" class="ion-padding">
+  <ion-item lines="none" class="field">
+    <ion-input label="Título" labelPlacement="stacked" placeholder="Ej: Cena, gasolina..." [(ngModel)]="titulo"></ion-input>
+  </ion-item>
+
+  <div class="two-col">
+    <ion-item lines="none" class="field">
+      <ion-input label="Monto" labelPlacement="stacked" type="number" inputmode="numeric" placeholder="0" [(ngModel)]="monto"></ion-input>
+    </ion-item>
+    <ion-item lines="none" class="field">
+      <ion-input label="Fecha" labelPlacement="stacked" type="date" [(ngModel)]="fecha"></ion-input>
+    </ion-item>
+  </div>
+
+  <ion-item lines="none" class="field">
+    <ion-select label="¿Quién pagó?" labelPlacement="stacked" [(ngModel)]="pagadoPor" interface="action-sheet">
+      <ion-select-option *ngFor="let m of miembros" [value]="m.id">{{ m.alias }}</ion-select-option>
+    </ion-select>
+  </ion-item>
+
+  <label class="lbl">¿Quiénes participan? <span class="vvg-muted">(se divide en partes iguales)</span></label>
+  <div class="participants">
+    <div class="chip" *ngFor="let m of miembros" [class.sel]="participantes.has(m.id)" (click)="toggle(m.id)">
+      <app-avatar [user]="m" [size]="30"></app-avatar>
+      <span>{{ m.alias }}</span>
+      <ion-icon *ngIf="participantes.has(m.id)" name="checkmark"></ion-icon>
+    </div>
+  </div>
+
+  <div class="split vvg-card" *ngIf="porPersona > 0">
+    <span class="vvg-muted">Cada participante paga</span>
+    <strong>{{ porPersona | money }}</strong>
+  </div>
+
+  <ion-button expand="block" (click)="guardar()" class="save">Guardar gasto</ion-button>
+</ion-content>
