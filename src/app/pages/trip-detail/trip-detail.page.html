@@ -1,0 +1,156 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start"><ion-back-button defaultHref="/tabs/historial"></ion-back-button></ion-buttons>
+    <ion-title>{{ trip?.nombre }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="abrirChatGrupo()"><ion-icon slot="icon-only" name="chatbubbles-outline"></ion-icon></ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+  <ion-toolbar>
+    <ion-segment [value]="seg" (ionChange)="onSeg($event)" scrollable>
+      <ion-segment-button value="detalles"><ion-label>Detalles</ion-label></ion-segment-button>
+      <ion-segment-button value="balance"><ion-label>Balance</ion-label></ion-segment-button>
+      <ion-segment-button value="fotos"><ion-label>Fotos</ion-label></ion-segment-button>
+      <ion-segment-button value="ajustes"><ion-label>Ajustes</ion-label></ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" class="ion-padding" *ngIf="trip as t">
+  <!-- Cuadros de totales (comunes a Detalles y Balance) -->
+  <div class="totals" *ngIf="seg === 'detalles' || seg === 'balance'">
+    <div class="total-box">
+      <span class="vvg-muted">Gasto total</span>
+      <strong>{{ total | money }}</strong>
+    </div>
+    <div class="total-box accent">
+      <span class="vvg-muted">Tu parte</span>
+      <strong>{{ tuParte | money }}</strong>
+    </div>
+  </div>
+
+  <!-- ============ DETALLES ============ -->
+  <div *ngIf="seg === 'detalles'">
+    <div *ngFor="let grupo of gastosPorFecha">
+      <h3 class="vvg-section-title">{{ fechaLarga(grupo.fecha) }}</h3>
+      <div class="exp vvg-card" *ngFor="let e of grupo.gastos" (click)="abrirGasto(e)">
+        <app-avatar [user]="pagador(e)" [size]="42"></app-avatar>
+        <div class="exp-body">
+          <strong>{{ e.titulo }}</strong>
+          <span class="vvg-muted small">Pagó {{ pagador(e)?.alias }} · {{ e.participantes.length }} participantes</span>
+        </div>
+        <div class="exp-amounts">
+          <span class="monto">{{ e.monto | money }}</span>
+          <span class="parte vvg-muted" *ngIf="miParteEn(e) > 0">tu parte {{ miParteEn(e) | money }}</span>
+          <span class="parte vvg-muted" *ngIf="miParteEn(e) === 0">no participas</span>
+        </div>
+      </div>
+    </div>
+    <div class="empty" *ngIf="!gastosPorFecha.length">
+      <ion-icon name="receipt-outline"></ion-icon>
+      <p>Aún no hay gastos. Toca el botón + para agregar uno.</p>
+    </div>
+    <div style="height: 80px"></div>
+  </div>
+
+  <!-- ============ BALANCE ============ -->
+  <div *ngIf="seg === 'balance'">
+    <h3 class="vvg-section-title">Quién debe a quién</h3>
+    <div *ngIf="settlements.length; else saldado">
+      <div class="settle vvg-card" *ngFor="let s of settlements">
+        <app-avatar [user]="user(s.fromUserId)" [size]="38"></app-avatar>
+        <div class="flow">
+          <span><b>{{ user(s.fromUserId)?.alias }}</b> le debe a <b>{{ user(s.toUserId)?.alias }}</b></span>
+          <span class="vvg-neg">{{ s.monto | money }}</span>
+        </div>
+        <app-avatar [user]="user(s.toUserId)" [size]="38"></app-avatar>
+      </div>
+    </div>
+    <ng-template #saldado>
+      <div class="empty"><ion-icon name="checkmark-circle"></ion-icon><p>Todo está saldado. 🎉</p></div>
+    </ng-template>
+
+    <h3 class="vvg-section-title">Balance por persona</h3>
+    <div class="bal vvg-card" *ngFor="let b of balances">
+      <app-avatar [user]="user(b.userId)" [size]="40"></app-avatar>
+      <div class="bal-body">
+        <strong>{{ user(b.userId)?.alias }}</strong>
+        <span class="vvg-muted small">Pagó {{ b.pagado | money }} · Consumió {{ b.parte | money }}</span>
+      </div>
+      <span [class]="b.neto >= 0 ? 'vvg-pos' : 'vvg-neg'">
+        {{ b.neto >= 0 ? 'recibe ' : 'debe ' }}{{ b.neto | money }}
+      </span>
+    </div>
+    <div style="height: 24px"></div>
+  </div>
+
+  <!-- ============ FOTOS ============ -->
+  <div *ngIf="seg === 'fotos'">
+    <label class="upload vvg-card">
+      <ion-icon name="camera"></ion-icon>
+      <span>Subir fotos desde tu galería</span>
+      <input type="file" accept="image/*" multiple hidden (change)="onPickPhoto($event)" />
+    </label>
+
+    <div *ngFor="let g of fotosPorFecha">
+      <h3 class="vvg-section-title">{{ fechaLarga(g.fecha) }}</h3>
+      <div class="grid">
+        <div class="photo" *ngFor="let f of g.fotos" [style.background-image]="'url(' + f.dataUrl + ')'"></div>
+      </div>
+    </div>
+    <div class="empty" *ngIf="!fotosPorFecha.length">
+      <ion-icon name="images"></ion-icon>
+      <p>Todavía no hay fotos en este {{ t.tipo }}.</p>
+    </div>
+    <div style="height: 24px"></div>
+  </div>
+
+  <!-- ============ AJUSTES ============ -->
+  <div *ngIf="seg === 'ajustes'">
+    <ion-button expand="block" color="success" class="finish" (click)="finalizar()" [disabled]="t.finalizado">
+      <ion-icon name="flag" slot="start"></ion-icon>
+      {{ t.finalizado ? 'Ya finalizado' : 'Marcar fin del ' + t.tipo }}
+    </ion-button>
+
+    <ion-list class="settings-list" inset="true">
+      <ion-item button (click)="editarNombre()">
+        <ion-icon name="create-outline" slot="start"></ion-icon>
+        <ion-label>Cambiar nombre<p>{{ t.nombre }}</p></ion-label>
+      </ion-item>
+      <ion-item button (click)="editarDescripcion()">
+        <ion-icon name="pricetag-outline" slot="start"></ion-icon>
+        <ion-label>Cambiar descripción<p>{{ t.descripcion || 'Sin descripción' }}</p></ion-label>
+      </ion-item>
+    </ion-list>
+
+    <h3 class="vvg-section-title">Participantes</h3>
+    <div class="member vvg-card" *ngFor="let u of miembros">
+      <app-avatar [user]="u" [size]="40"></app-avatar>
+      <div class="bal-body">
+        <strong>{{ u.alias }}</strong>
+        <span class="vvg-muted small">{{ u.id === t.ownerId ? 'Organizador' : 'Participante' }}</span>
+      </div>
+      <ion-button fill="clear" color="danger" *ngIf="u.id !== t.ownerId" (click)="quitarMiembro(u)">
+        <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
+      </ion-button>
+    </div>
+
+    <h3 class="vvg-section-title">Añadir amigos</h3>
+    <div *ngIf="amigosParaAgregar().length; else sinAmigosAdd">
+      <div class="member vvg-card" *ngFor="let u of amigosParaAgregar()">
+        <app-avatar [user]="u" [size]="40"></app-avatar>
+        <div class="bal-body"><strong>{{ u.alias }}</strong></div>
+        <ion-button fill="clear" (click)="agregarMiembro(u)">
+          <ion-icon slot="icon-only" name="person-add-outline"></ion-icon>
+        </ion-button>
+      </div>
+    </div>
+    <ng-template #sinAmigosAdd><p class="vvg-muted">No hay amigos para añadir.</p></ng-template>
+    <div style="height: 24px"></div>
+  </div>
+
+  <!-- FAB para agregar gasto (solo en Detalles) -->
+  <ion-fab slot="fixed" vertical="bottom" horizontal="end" *ngIf="seg === 'detalles'">
+    <ion-fab-button (click)="agregarGasto()"><ion-icon name="add"></ion-icon></ion-fab-button>
+  </ion-fab>
+</ion-content>

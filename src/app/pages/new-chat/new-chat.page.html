@@ -1,0 +1,28 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start"><ion-back-button defaultHref="/tabs/mensajes"></ion-back-button></ion-buttons>
+    <ion-title>Nuevo chat</ion-title>
+  </ion-toolbar>
+  <ion-toolbar>
+    <ion-searchbar [(ngModel)]="q" placeholder="Buscar amigo" animated></ion-searchbar>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" class="ion-padding">
+  <div *ngIf="amigos.length; else vacio">
+    <div class="friend-row" *ngFor="let f of amigos" (click)="iniciar(f)">
+      <app-avatar [user]="f" [size]="48"></app-avatar>
+      <div class="friend-body">
+        <strong>{{ f.alias }}</strong>
+        <span class="vvg-muted">{{ f.nombre }}</span>
+      </div>
+      <ion-icon name="chatbubbles-outline"></ion-icon>
+    </div>
+  </div>
+  <ng-template #vacio>
+    <div class="empty">
+      <ion-icon name="people-outline"></ion-icon>
+      <p>No se encontraron amigos.</p>
+    </div>
+  </ng-template>
+</ion-content>

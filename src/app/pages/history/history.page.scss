@@ -1,0 +1,42 @@
+.pills {
+  margin-bottom: 16px;
+}
+
+.trip-card {
+  margin-bottom: 14px;
+  cursor: pointer;
+
+  .trip-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    h3 { margin: 0; font-weight: 700; }
+  }
+  .estado {
+    font-size: 0.7rem;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(46, 196, 182, 0.15);
+    color: var(--ion-color-success);
+    font-weight: 600;
+    &.fin { background: rgba(138, 141, 159, 0.15); color: var(--vvg-muted); }
+  }
+  .desc { margin: 6px 0 12px; }
+  .trip-foot {
+    display: flex;
+    align-items: flex-end;
+    gap: 24px;
+    div { display: flex; flex-direction: column; }
+    .small { font-size: 0.7rem; }
+    .total { font-size: 1.2rem; font-weight: 700; color: #2b2d3a; }
+    .parte span:last-child { font-weight: 600; color: var(--ion-color-primary); }
+    ion-icon { margin-left: auto; color: var(--vvg-muted); font-size: 20px; }
+  }
+}
+
+.empty {
+  text-align: center;
+  color: var(--vvg-muted);
+  padding-top: 40px;
+  ion-icon { font-size: 48px; display: block; margin: 0 auto 12px; }
+}

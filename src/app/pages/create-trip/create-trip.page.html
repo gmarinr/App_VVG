@@ -1,0 +1,58 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title>Nuevo {{ tipo }}</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" class="ion-padding">
+  <!-- Nombre -->
+  <ion-item lines="none" class="field">
+    <ion-input label="Nombre" labelPlacement="stacked" placeholder="Ej: Fin de semana en la playa" [(ngModel)]="nombre"></ion-input>
+  </ion-item>
+
+  <!-- Tipo + Fechas -->
+  <div class="two-col">
+    <div class="col">
+      <label class="lbl">Tipo</label>
+      <ion-segment [value]="tipo" (ionChange)="onTipo($event)">
+        <ion-segment-button value="viaje"><ion-label>Viaje</ion-label></ion-segment-button>
+        <ion-segment-button value="salida"><ion-label>Salida</ion-label></ion-segment-button>
+      </ion-segment>
+    </div>
+  </div>
+
+  <div class="two-col dates">
+    <ion-item lines="none" class="field">
+      <ion-input label="Inicio" labelPlacement="stacked" type="date" [(ngModel)]="fechaInicio"></ion-input>
+    </ion-item>
+    <ion-item lines="none" class="field">
+      <ion-input label="Fin" labelPlacement="stacked" type="date" [(ngModel)]="fechaFin"></ion-input>
+    </ion-item>
+  </div>
+
+  <!-- Invitar amigos -->
+  <label class="lbl">Invitar amigos</label>
+  <div class="vvg-hscroll friends" *ngIf="amigos.length; else sinAmigos">
+    <div class="friend" *ngFor="let f of amigos" [class.sel]="seleccionados.has(f.id)" (click)="toggle(f.id)">
+      <app-avatar [user]="f" [size]="52"></app-avatar>
+      <ion-icon name="checkmark-circle" *ngIf="seleccionados.has(f.id)" class="check"></ion-icon>
+      <span>{{ f.alias }}</span>
+    </div>
+  </div>
+  <ng-template #sinAmigos>
+    <p class="vvg-muted">Aún no tienes amigos agregados.</p>
+  </ng-template>
+
+  <ion-button fill="outline" size="small" (click)="generarLink()" class="link-btn">
+    <ion-icon name="link" slot="start"></ion-icon> Crear enlace de invitación
+  </ion-button>
+  <p class="invite-link" *ngIf="inviteLink">{{ inviteLink }}</p>
+
+  <!-- Descripción -->
+  <ion-item lines="none" class="field desc">
+    <ion-textarea label="Descripción" labelPlacement="stacked" placeholder="¿De qué trata?" [autoGrow]="true" [(ngModel)]="descripcion"></ion-textarea>
+  </ion-item>
+
+  <ion-button expand="block" (click)="confirmar()" class="confirm">Confirmar</ion-button>
+  <div style="height: 24px"></div>
+</ion-content>

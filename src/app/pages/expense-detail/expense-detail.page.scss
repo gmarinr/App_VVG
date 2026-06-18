@@ -1,0 +1,47 @@
+.hero {
+  text-align: center;
+  padding: 22px;
+  h1 { margin: 6px 0; font-weight: 800; }
+  .monto {
+    font-size: 2.1rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--ion-color-primary), var(--ion-color-secondary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 12px;
+  }
+  .paid-by {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #f4f5fa;
+    padding: 6px 14px 6px 6px;
+    border-radius: 999px;
+    font-size: 0.9rem;
+  }
+}
+
+.split-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  ion-icon { font-size: 24px; color: var(--ion-color-primary); }
+  span { flex: 1; font-size: 0.88rem; }
+  strong { color: var(--ion-color-primary); white-space: nowrap; }
+}
+
+.small { font-size: 0.74rem; }
+
+.part {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  .part-body { flex: 1; display: flex; flex-direction: column; }
+  .part-body strong { font-weight: 600; }
+  .part-amount { display: flex; flex-direction: column; align-items: flex-end; }
+  .debe { font-weight: 700; color: #2b2d3a; }
+  .net { font-size: 0.74rem; }
+}

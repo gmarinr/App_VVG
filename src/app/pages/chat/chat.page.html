@@ -1,0 +1,41 @@
+<!-- Cabecera personalizada con el perfil (sin header típico) -->
+<div class="chat-header">
+  <ion-button fill="clear" class="back" (click)="volver()">
+    <ion-icon name="arrow-back"></ion-icon>
+  </ion-button>
+  <div class="profile" (click)="verPerfil()">
+    <app-avatar *ngIf="chat?.tipo === 'dm'" [user]="otherUser" [size]="40"></app-avatar>
+    <div *ngIf="chat?.tipo === 'grupo'" class="group-avatar"><ion-icon name="people"></ion-icon></div>
+    <div class="profile-text">
+      <strong>{{ titulo }}</strong>
+      <span>{{ subtitulo }}</span>
+    </div>
+  </div>
+</div>
+
+<ion-content class="chat-bg ion-padding">
+  <div *ngFor="let g of gruposPorFecha">
+    <div class="day-sep"><span>{{ fechaSeparador(g.fecha) }}</span></div>
+    <div class="msg-line" *ngFor="let m of g.mensajes" [class.mine]="esMio(m)">
+      <div class="bubble">
+        <span class="author" *ngIf="!esMio(m) && chat?.tipo === 'grupo'">{{ remitente(m)?.alias }}</span>
+        <span class="text">{{ m.texto }}</span>
+        <span class="time">{{ hora(m.fecha) }}</span>
+      </div>
+    </div>
+  </div>
+  <div class="empty" *ngIf="!gruposPorFecha.length">
+    <p class="vvg-muted">Envía el primer mensaje 👋</p>
+  </div>
+</ion-content>
+
+<ion-footer>
+  <ion-toolbar class="composer">
+    <ion-input [(ngModel)]="texto" placeholder="Escribe un mensaje..." (keyup.enter)="enviar()" class="composer-input"></ion-input>
+    <ion-buttons slot="end">
+      <ion-button (click)="enviar()" [disabled]="!texto.trim()" class="send-btn">
+        <ion-icon slot="icon-only" name="send"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-footer>

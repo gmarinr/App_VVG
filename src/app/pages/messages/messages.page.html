@@ -1,0 +1,45 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title>Mensajes</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="nuevo()"><ion-icon slot="icon-only" name="add"></ion-icon></ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" class="ion-padding">
+  <ion-segment [value]="tab" (ionChange)="onTab($event)" class="pills">
+    <ion-segment-button value="amigos">
+      <ion-icon name="person-outline"></ion-icon>
+      <ion-label>Amigos</ion-label>
+    </ion-segment-button>
+    <ion-segment-button value="grupos">
+      <ion-icon name="people-outline"></ion-icon>
+      <ion-label>Grupos</ion-label>
+    </ion-segment-button>
+  </ion-segment>
+
+  <div *ngIf="chats.length; else vacio">
+    <div class="chat-row" *ngFor="let c of chats" (click)="open(c)">
+      <app-avatar *ngIf="c.tipo === 'dm'" [user]="chatUser(c)" [size]="50"></app-avatar>
+      <div *ngIf="c.tipo === 'grupo'" class="group-avatar"><ion-icon name="people"></ion-icon></div>
+      <div class="chat-body">
+        <div class="chat-top">
+          <strong>{{ chatName(c) }}</strong>
+          <span class="vvg-muted hora">{{ hora(c) }}</span>
+        </div>
+        <span class="vvg-muted preview">{{ preview(c) }}</span>
+      </div>
+    </div>
+  </div>
+
+  <ng-template #vacio>
+    <div class="empty">
+      <ion-icon name="chatbubbles-outline"></ion-icon>
+      <p>No tienes {{ tab === 'amigos' ? 'chats con amigos' : 'grupos' }} todavía.</p>
+      <ion-button fill="outline" size="small" (click)="nuevo()" *ngIf="tab === 'amigos'">
+        <ion-icon name="add" slot="start"></ion-icon> Iniciar un chat
+      </ion-button>
+    </div>
+  </ng-template>
+</ion-content>

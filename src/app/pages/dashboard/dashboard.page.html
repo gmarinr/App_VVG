@@ -1,0 +1,70 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title>
+      <span class="vvg-logo">VVG</span> Menú principal
+    </ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" class="ion-padding">
+  <ion-refresher slot="fixed" (ionRefresh)="refresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <!-- Viaje actual -->
+  <div class="current-card" *ngIf="current as trip; else noTrip" (click)="openTrip(trip)">
+    <div class="current-head">
+      <span class="badge">{{ trip.tipo === 'viaje' ? '✈️ Viaje actual' : '🍺 Salida actual' }}</span>
+      <ion-icon name="chevron-forward"></ion-icon>
+    </div>
+    <h2>{{ trip.nombre }}</h2>
+    <p class="vvg-muted desc">{{ trip.descripcion }}</p>
+    <p class="vvg-muted small">Inicio: {{ shortDate(trip.fechaInicio) }} · Total {{ tripTotal(trip) | money }}</p>
+    <app-bar-chart [data]="currentTripChart(trip)"></app-bar-chart>
+  </div>
+  <ng-template #noTrip>
+    <div class="vvg-card empty">
+      <ion-icon name="airplane-outline"></ion-icon>
+      <p>No tienes un viaje o salida activo.</p>
+    </div>
+  </ng-template>
+
+  <!-- Balance por viaje -->
+  <h3 class="vvg-section-title">Balance</h3>
+  <div class="vvg-hscroll" *ngIf="balancesPorViaje.length; else sinBalance">
+    <div class="mini-card" *ngFor="let b of balancesPorViaje" (click)="openTrip(b.trip)">
+      <span [class]="b.neto >= 0 ? 'vvg-pos' : 'vvg-neg'" class="amount">
+        {{ b.neto >= 0 ? '+' : '-' }}{{ b.neto | money }}
+      </span>
+      <span class="label vvg-muted">{{ b.neto >= 0 ? 'Te deben' : 'Debes' }}</span>
+      <span class="sub">{{ b.trip.nombre }}</span>
+    </div>
+  </div>
+  <ng-template #sinBalance>
+    <p class="vvg-muted ion-padding-start">Todo saldado. 🎉</p>
+  </ng-template>
+
+  <!-- Pagos pendientes por persona -->
+  <h3 class="vvg-section-title">Pagos pendientes</h3>
+  <div class="vvg-hscroll" *ngIf="pagosPorPersona.length; else sinPagos">
+    <div class="mini-card person" *ngFor="let p of pagosPorPersona" (click)="verPerfil(p.user)">
+      <app-avatar [user]="p.user" [size]="44"></app-avatar>
+      <span [class]="p.monto >= 0 ? 'vvg-pos' : 'vvg-neg'" class="amount">
+        {{ p.monto >= 0 ? '+' : '-' }}{{ p.monto | money }}
+      </span>
+      <span class="sub">{{ p.user.alias }}</span>
+      <span class="label vvg-muted">{{ p.monto >= 0 ? 'te paga' : 'le pagas' }}</span>
+    </div>
+  </div>
+  <ng-template #sinPagos>
+    <p class="vvg-muted ion-padding-start">No tienes pagos pendientes.</p>
+  </ng-template>
+
+  <!-- Gráfico de gastos totales -->
+  <h3 class="vvg-section-title">Gastos totales por fecha</h3>
+  <div class="vvg-card">
+    <app-bar-chart [data]="chartData"></app-bar-chart>
+  </div>
+
+  <div style="height: 24px"></div>
+</ion-content>

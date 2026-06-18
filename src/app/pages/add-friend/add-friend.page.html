@@ -1,0 +1,30 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start"><ion-back-button defaultHref="/tabs/cuenta"></ion-back-button></ion-buttons>
+    <ion-title>Agregar amigo</ion-title>
+  </ion-toolbar>
+  <ion-toolbar>
+    <ion-searchbar [(ngModel)]="q" placeholder="Buscar por nombre o correo" animated></ion-searchbar>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" class="ion-padding">
+  <div *ngIf="resultados.length; else vacio">
+    <div class="friend-row" *ngFor="let u of resultados">
+      <app-avatar [user]="u" [size]="48"></app-avatar>
+      <div class="friend-body">
+        <strong>{{ u.alias }}</strong>
+        <span class="vvg-muted">{{ u.nombre }}</span>
+      </div>
+      <ion-button fill="solid" size="small" (click)="agregar(u)">
+        <ion-icon name="person-add" slot="start"></ion-icon> Agregar
+      </ion-button>
+    </div>
+  </div>
+  <ng-template #vacio>
+    <div class="empty">
+      <ion-icon name="people-outline"></ion-icon>
+      <p>No hay usuarios para agregar.</p>
+    </div>
+  </ng-template>
+</ion-content>

@@ -1,0 +1,17 @@
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 6px;
+  border-bottom: 1px solid rgba(138, 141, 159, 0.12);
+  .friend-body { flex: 1; display: flex; flex-direction: column; }
+  .friend-body strong { font-weight: 600; }
+  .friend-body span { font-size: 0.8rem; }
+}
+
+.empty {
+  text-align: center;
+  color: var(--vvg-muted);
+  padding-top: 50px;
+  ion-icon { font-size: 50px; display: block; margin: 0 auto 12px; }
+}

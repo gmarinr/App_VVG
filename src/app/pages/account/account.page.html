@@ -1,0 +1,50 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title>Mi cuenta</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="logout()"><ion-icon slot="icon-only" name="log-out-outline"></ion-icon></ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" class="ion-padding" *ngIf="me as u">
+  <div class="profile-head vvg-card">
+    <app-avatar [user]="u" [size]="84"></app-avatar>
+    <h2>{{ u.alias }} <ion-icon name="create-outline" (click)="editarAlias()"></ion-icon></h2>
+    <p class="vvg-muted">{{ u.nombre }} · {{ u.email }}</p>
+  </div>
+
+  <div class="bio vvg-card" (click)="editarDescripcion()">
+    <div class="bio-head">
+      <span class="vvg-muted">Sobre ti</span>
+      <ion-icon name="create-outline"></ion-icon>
+    </div>
+    <p>{{ u.descripcion || 'Toca para agregar una descripción...' }}</p>
+  </div>
+
+  <div class="amigos-head">
+    <h3 class="vvg-section-title" style="margin:0">Amigos ({{ amigos.length }})</h3>
+    <ion-button fill="clear" size="small" (click)="agregarAmigo()">
+      <ion-icon name="person-add" slot="start"></ion-icon> Agregar
+    </ion-button>
+  </div>
+
+  <div *ngIf="amigos.length; else sinAmigos">
+    <div class="friend-row" *ngFor="let f of amigos" (click)="verPerfil(f)">
+      <app-avatar [user]="f" [size]="44"></app-avatar>
+      <div class="friend-body">
+        <strong>{{ f.alias }}</strong>
+        <span class="vvg-muted">{{ f.nombre }}</span>
+      </div>
+      <ion-icon name="chevron-forward"></ion-icon>
+    </div>
+  </div>
+  <ng-template #sinAmigos>
+    <p class="vvg-muted">Aún no tienes amigos. ¡Agrega algunos!</p>
+  </ng-template>
+
+  <ion-button expand="block" fill="clear" color="medium" class="reset" (click)="resetDemo()">
+    <ion-icon name="refresh" slot="start"></ion-icon> Reiniciar datos de demo
+  </ion-button>
+  <div style="height: 24px"></div>
+</ion-content>

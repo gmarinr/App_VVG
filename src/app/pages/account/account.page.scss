@@ -1,0 +1,49 @@
+.profile-head {
+  text-align: center;
+  padding: 24px;
+  margin-bottom: 14px;
+  h2 {
+    margin: 12px 0 2px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    ion-icon { font-size: 18px; color: var(--ion-color-primary); }
+  }
+}
+
+.bio {
+  margin-bottom: 6px;
+  cursor: pointer;
+  .bio-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    span { font-size: 0.8rem; font-weight: 600; }
+    ion-icon { color: var(--ion-color-primary); }
+  }
+  p { margin: 0; color: #2b2d3a; }
+}
+
+.amigos-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 6px;
+  border-bottom: 1px solid rgba(138, 141, 159, 0.12);
+  cursor: pointer;
+  .friend-body { flex: 1; display: flex; flex-direction: column; }
+  .friend-body strong { font-weight: 600; }
+  .friend-body span { font-size: 0.8rem; }
+  ion-icon { color: var(--vvg-muted); }
+}
+
+.reset { margin-top: 18px; font-size: 0.85rem; }

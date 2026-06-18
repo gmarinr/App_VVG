@@ -1,0 +1,46 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start"><ion-back-button [defaultHref]="'/viaje/' + tripId"></ion-back-button></ion-buttons>
+    <ion-title>Detalle del gasto</ion-title>
+    <ion-buttons slot="end">
+      <ion-button color="danger" (click)="eliminar()"><ion-icon slot="icon-only" name="trash-outline"></ion-icon></ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" class="ion-padding" *ngIf="expense as e">
+  <!-- Encabezado del gasto -->
+  <div class="hero vvg-card">
+    <span class="vvg-muted">{{ fechaLarga(e.fecha) }}</span>
+    <h1>{{ e.titulo }}</h1>
+    <div class="monto">{{ e.monto | money }}</div>
+    <div class="paid-by">
+      <app-avatar [user]="pagador" [size]="34"></app-avatar>
+      <span>Pagado por <b>{{ pagador?.alias }}</b></span>
+    </div>
+  </div>
+
+  <!-- Cómo se divide -->
+  <h3 class="vvg-section-title">¿Cómo se divide?</h3>
+  <div class="split-banner vvg-card">
+    <ion-icon name="swap-horizontal"></ion-icon>
+    <span>Dividido en partes iguales entre <b>{{ e.participantes.length }}</b> personas</span>
+    <strong>{{ porPersona | money }} c/u</strong>
+  </div>
+
+  <h3 class="vvg-section-title">Participantes</h3>
+  <div class="part vvg-card" *ngFor="let r of reparto">
+    <app-avatar [user]="r.user" [size]="40"></app-avatar>
+    <div class="part-body">
+      <strong>{{ r.user.alias }}</strong>
+      <span class="vvg-muted small" *ngIf="r.pago">Pagó el total ({{ e.monto | money }})</span>
+      <span class="vvg-muted small" *ngIf="!r.pago">Debe su parte</span>
+    </div>
+    <div class="part-amount">
+      <span class="debe">{{ r.debe | money }}</span>
+      <span class="net vvg-pos" *ngIf="r.pago">+{{ e.monto - r.debe | money }}</span>
+      <span class="net vvg-neg" *ngIf="!r.pago">-{{ r.debe | money }}</span>
+    </div>
+  </div>
+  <div style="height: 24px"></div>
+</ion-content>
