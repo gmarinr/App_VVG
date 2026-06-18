@@ -10,8 +10,8 @@
     <ion-input label="Nombre" labelPlacement="stacked" placeholder="Ej: Fin de semana en la playa" [(ngModel)]="nombre"></ion-input>
   </ion-item>
 
-  <!-- Tipo + Fechas -->
-  <div class="two-col">
+  <!-- Tipo y Fecha a la misma altura -->
+  <div class="tipo-fecha">
     <div class="col">
       <label class="lbl">Tipo</label>
       <ion-segment [value]="tipo" (ionChange)="onTipo($event)">
@@ -19,15 +19,17 @@
         <ion-segment-button value="salida"><ion-label>Salida</ion-label></ion-segment-button>
       </ion-segment>
     </div>
-  </div>
-
-  <div class="two-col dates">
-    <ion-item lines="none" class="field">
-      <ion-input label="Inicio" labelPlacement="stacked" type="date" [(ngModel)]="fechaInicio"></ion-input>
-    </ion-item>
-    <ion-item lines="none" class="field">
-      <ion-input label="Fin" labelPlacement="stacked" type="date" [(ngModel)]="fechaFin"></ion-input>
-    </ion-item>
+    <div class="col">
+      <label class="lbl">Fecha</label>
+      <div class="date-stack">
+        <ion-item lines="none" class="field">
+          <ion-input label="Desde" labelPlacement="stacked" type="date" [(ngModel)]="fechaInicio"></ion-input>
+        </ion-item>
+        <ion-item lines="none" class="field">
+          <ion-input label="Hasta" labelPlacement="stacked" type="date" [(ngModel)]="fechaFin"></ion-input>
+        </ion-item>
+      </div>
+    </div>
   </div>
 
   <!-- Invitar amigos -->

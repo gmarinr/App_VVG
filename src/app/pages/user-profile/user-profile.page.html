@@ -26,12 +26,13 @@
   </div>
 
   <h3 class="vvg-section-title">Amigos ({{ amigos.length }})</h3>
-  <div class="friend-row" *ngFor="let f of amigos">
-    <app-avatar [user]="f" [size]="42"></app-avatar>
-    <div class="friend-body">
-      <strong>{{ f.alias }}</strong>
-      <span class="vvg-muted">{{ f.nombre }}</span>
+  <div class="vvg-hscroll friends" *ngIf="amigos.length; else sinAmigos">
+    <div class="friend" *ngFor="let f of amigos">
+      <app-avatar [user]="f" [size]="64"></app-avatar>
+      <span>{{ f.alias }}</span>
     </div>
   </div>
-  <p class="vvg-muted" *ngIf="!amigos.length">Sin amigos para mostrar.</p>
+  <ng-template #sinAmigos>
+    <p class="vvg-muted">Sin amigos para mostrar.</p>
+  </ng-template>
 </ion-content>

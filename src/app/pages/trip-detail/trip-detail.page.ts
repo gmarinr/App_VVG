@@ -83,6 +83,16 @@ export class TripDetailPage {
     return this.me ? this.balance.userShareInExpense(e, this.me.id) : 0;
   }
 
+  // Si el usuario pagó este gasto, cuánto le deben los demás (monto - su parte).
+  teDebenEn(e: Expense): number {
+    if (!this.me || e.pagadoPor !== this.me.id) return 0;
+    return e.monto - this.miParteEn(e);
+  }
+
+  pagueYo(e: Expense): boolean {
+    return !!this.me && e.pagadoPor === this.me.id;
+  }
+
   // ---------- Balance ----------
   get balances(): UserBalance[] {
     return this.balance.tripBalances(this.tripId);

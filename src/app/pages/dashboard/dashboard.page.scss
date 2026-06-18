@@ -1,10 +1,11 @@
 .vvg-logo {
   font-weight: 800;
+  font-size: 1.2rem;
   background: linear-gradient(135deg, var(--ion-color-primary), var(--ion-color-secondary));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  margin-right: 6px;
+  margin-left: 16px;
 }
 
 .current-card {
@@ -39,19 +40,3 @@
   ion-icon { font-size: 38px; display: block; margin: 0 auto 8px; }
 }
 
-.mini-card {
-  background: var(--vvg-card-bg);
-  border-radius: 16px;
-  box-shadow: var(--vvg-shadow);
-  padding: 14px;
-  min-width: 130px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  cursor: pointer;
-
-  &.person { align-items: center; text-align: center; }
-  .amount { font-size: 1.15rem; }
-  .sub { font-weight: 600; font-size: 0.85rem; margin-top: 2px; }
-  .label { font-size: 0.72rem; }
-}

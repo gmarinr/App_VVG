@@ -29,14 +29,14 @@
     </ion-button>
   </div>
 
-  <div *ngIf="amigos.length; else sinAmigos">
-    <div class="friend-row" *ngFor="let f of amigos" (click)="verPerfil(f)">
-      <app-avatar [user]="f" [size]="44"></app-avatar>
-      <div class="friend-body">
-        <strong>{{ f.alias }}</strong>
-        <span class="vvg-muted">{{ f.nombre }}</span>
-      </div>
-      <ion-icon name="chevron-forward"></ion-icon>
+  <div class="vvg-hscroll friends" *ngIf="amigos.length; else sinAmigos">
+    <div class="friend" *ngFor="let f of amigos" (click)="verPerfil(f)">
+      <app-avatar [user]="f" [size]="64"></app-avatar>
+      <span>{{ f.alias }}</span>
+    </div>
+    <div class="friend add" (click)="agregarAmigo()">
+      <div class="add-circle"><ion-icon name="add"></ion-icon></div>
+      <span>Agregar</span>
     </div>
   </div>
   <ng-template #sinAmigos>

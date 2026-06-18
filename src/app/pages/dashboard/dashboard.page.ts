@@ -8,8 +8,8 @@ import { AuthService } from '../../services/auth.service';
 import { DataService } from '../../services/data.service';
 import { BalanceService } from '../../services/balance.service';
 import { MoneyPipe } from '../../shared/money.pipe';
-import { AvatarComponent } from '../../shared/avatar.component';
 import { BarChartComponent, BarDatum } from '../../shared/bar-chart.component';
+import { AmountCardComponent } from '../../shared/amount-card.component';
 import { Trip, User } from '../../models/models';
 
 @Component({
@@ -17,7 +17,8 @@ import { Trip, User } from '../../models/models';
   standalone: true,
   imports: [
     CommonModule, IonContent, IonHeader, IonToolbar, IonTitle, IonIcon,
-    IonRefresher, IonRefresherContent, MoneyPipe, AvatarComponent, BarChartComponent,
+    IonRefresher, IonRefresherContent, MoneyPipe, BarChartComponent,
+    AmountCardComponent,
   ],
   templateUrl: './dashboard.page.html',
 })

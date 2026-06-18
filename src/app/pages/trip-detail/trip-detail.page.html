@@ -41,8 +41,9 @@
         </div>
         <div class="exp-amounts">
           <span class="monto">{{ e.monto | money }}</span>
-          <span class="parte vvg-muted" *ngIf="miParteEn(e) > 0">tu parte {{ miParteEn(e) | money }}</span>
-          <span class="parte vvg-muted" *ngIf="miParteEn(e) === 0">no participas</span>
+          <span class="parte vvg-pos" *ngIf="pagueYo(e) && teDebenEn(e) > 0">te deben {{ teDebenEn(e) | money }}</span>
+          <span class="parte vvg-muted" *ngIf="!pagueYo(e) && miParteEn(e) > 0">tu parte {{ miParteEn(e) | money }}</span>
+          <span class="parte vvg-muted" *ngIf="!pagueYo(e) && miParteEn(e) === 0">no participas</span>
         </div>
       </div>
     </div>
