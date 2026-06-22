@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import {
   IonContent, IonHeader, IonToolbar, IonTitle, IonIcon, IonRefresher, IonRefresherContent,
   IonButton, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonInput,
-  IonItem, IonLabel, IonList, IonBadge, IonGrid, IonRow, IonCol, ToastController,
+  IonItem, IonLabel, IonList, IonBadge, IonGrid, IonRow, IonCol, IonNote, ToastController,
 } from '@ionic/angular/standalone';
 import { AuthService } from '../../services/auth.service';
 import { DataService } from '../../services/data.service';
@@ -13,7 +13,7 @@ import { BalanceService } from '../../services/balance.service';
 import { MoneyPipe } from '../../shared/money.pipe';
 import { BarChartComponent, BarDatum } from '../../shared/bar-chart.component';
 import { AmountCardComponent } from '../../shared/amount-card.component';
-import { Settlement, Trip, User } from '../../models/models';
+import { Payment, Settlement, Trip, User } from '../../models/models';
 
 interface PendingPaymentItem {
   id: string;
@@ -22,6 +22,8 @@ interface PendingPaymentItem {
   other: User;
   direction: 'receive' | 'pay';
   monto: number;
+  confirmations: Payment[];
+  waitingConfirmations: Payment[];
 }
 
 @Component({
@@ -31,7 +33,7 @@ interface PendingPaymentItem {
     CommonModule, FormsModule, IonContent, IonHeader, IonToolbar, IonTitle, IonIcon,
     IonRefresher, IonRefresherContent, IonButton, IonCard, IonCardContent,
     IonCardHeader, IonCardTitle, IonInput, IonItem, IonLabel, IonList, IonBadge,
-    IonGrid, IonRow, IonCol,
+    IonGrid, IonRow, IonCol, IonNote,
     MoneyPipe, BarChartComponent,
     AmountCardComponent,
   ],
@@ -92,6 +94,8 @@ export class DashboardPage {
     const items: PendingPaymentItem[] = [];
 
     for (const trip of this.data.tripsForUser(this.me.id)) {
+      const pendingPayments = this.data.tripPendingPayments(trip.id);
+
       for (const settlement of this.balance.tripSettlements(trip.id)) {
         if (settlement.fromUserId !== this.me.id && settlement.toUserId !== this.me.id) continue;
 
@@ -99,6 +103,9 @@ export class DashboardPage {
         const otherId = direction === 'receive' ? settlement.fromUserId : settlement.toUserId;
         const other = this.data.getUser(otherId);
         if (!other) continue;
+        const relatedPendingPayments = pendingPayments.filter(
+          (payment) => payment.fromUserId === settlement.fromUserId && payment.toUserId === settlement.toUserId
+        );
 
         items.push({
           id: `${trip.id}:${settlement.fromUserId}:${settlement.toUserId}`,
@@ -107,6 +114,8 @@ export class DashboardPage {
           other,
           direction,
           monto: settlement.monto,
+          confirmations: relatedPendingPayments.filter((payment) => payment.createdBy !== this.me!.id),
+          waitingConfirmations: relatedPendingPayments.filter((payment) => payment.createdBy === this.me!.id),
         });
       }
     }
@@ -157,6 +166,15 @@ export class DashboardPage {
     return this.paymentAmounts[item.id] ?? '';
   }
 
+  confirmationMessage(item: PendingPaymentItem, payment: Payment): string {
+    const reporter = this.data.getUser(payment.createdBy)?.alias ?? item.other.alias;
+    return `${reporter} reporto un pago de ${this.formatAmount(payment.monto)}.`;
+  }
+
+  waitingConfirmationMessage(item: PendingPaymentItem, payment: Payment): string {
+    return `Esperando confirmacion de ${item.other.alias} por ${this.formatAmount(payment.monto)}.`;
+  }
+
   setPaymentAmount(itemId: string, value: number | string | null | undefined) {
     const amount = Number(value);
     this.paymentAmounts[itemId] = Number.isFinite(amount) && amount > 0 ? amount : undefined;
@@ -186,6 +204,19 @@ export class DashboardPage {
         monto: amount,
       });
       delete this.paymentAmounts[item.id];
+      await this.show('Pago reportado. Esperando confirmacion de la otra persona.', 'success');
+    } catch (error) {
+      console.error(error);
+      await this.show('No se pudo reportar el pago.', 'danger');
+    } finally {
+      this.savingPaymentId = null;
+    }
+  }
+
+  async confirmReportedPayment(payment: Payment) {
+    this.savingPaymentId = payment.id;
+    try {
+      await this.data.confirmPayment(payment.id);
       await this.show('Pago confirmado.', 'success');
     } catch (error) {
       console.error(error);
@@ -201,6 +232,14 @@ export class DashboardPage {
 
   private roundMoney(value: number): number {
     return Math.round(value * 100) / 100;
+  }
+
+  private formatAmount(value: number): string {
+    return new Intl.NumberFormat('es-CL', {
+      style: 'currency',
+      currency: 'CLP',
+      maximumFractionDigits: 0,
+    }).format(value);
   }
 
   private async show(message: string, color: string) {

@@ -49,7 +49,7 @@
     </div>
     <div class="empty" *ngIf="!gastosPorFecha.length">
       <ion-icon name="receipt-outline"></ion-icon>
-      <p>Aún no hay gastos. Toca el botón + para agregar uno.</p>
+      <p>{{ t.finalizado ? 'No hay gastos registrados en este ' + t.tipo + '.' : 'Aún no hay gastos. Toca el botón + para agregar uno.' }}</p>
     </div>
     <div style="height: 80px"></div>
   </div>
@@ -108,19 +108,25 @@
 
   <!-- ============ AJUSTES ============ -->
   <div *ngIf="seg === 'ajustes'">
+    <p class="vvg-muted" *ngIf="t.finalizado">Este {{ t.tipo }} esta finalizado. Puedes revisar su informacion, pero no editar datos ni agregar gastos.</p>
+
     <ion-button expand="block" color="success" class="finish" (click)="finalizar()" [disabled]="t.finalizado">
       <ion-icon name="flag" slot="start"></ion-icon>
       {{ t.finalizado ? 'Ya finalizado' : 'Marcar fin del ' + t.tipo }}
     </ion-button>
 
     <ion-list class="settings-list" inset="true">
-      <ion-item button (click)="editarNombre()">
+      <ion-item button (click)="editarNombre()" [disabled]="t.finalizado">
         <ion-icon name="create-outline" slot="start"></ion-icon>
         <ion-label>Cambiar nombre<p>{{ t.nombre }}</p></ion-label>
       </ion-item>
-      <ion-item button (click)="editarDescripcion()">
+      <ion-item button (click)="editarDescripcion()" [disabled]="t.finalizado">
         <ion-icon name="pricetag-outline" slot="start"></ion-icon>
         <ion-label>Cambiar descripción<p>{{ t.descripcion || 'Sin descripción' }}</p></ion-label>
+      </ion-item>
+      <ion-item button (click)="editarFechas()" [disabled]="t.finalizado">
+        <ion-icon name="calendar-outline" slot="start"></ion-icon>
+        <ion-label>Cambiar fechas<p>{{ fechaCorta(t.fechaInicio) }} - {{ fechaCorta(t.fechaFin) }}</p></ion-label>
       </ion-item>
     </ion-list>
 
@@ -131,13 +137,13 @@
         <strong>{{ u.alias }}</strong>
         <span class="vvg-muted small">{{ u.id === t.ownerId ? 'Organizador' : 'Participante' }}</span>
       </div>
-      <ion-button fill="clear" color="danger" *ngIf="u.id !== t.ownerId" (click)="quitarMiembro(u)">
+      <ion-button fill="clear" color="danger" *ngIf="u.id !== t.ownerId && !t.finalizado" (click)="quitarMiembro(u)">
         <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
       </ion-button>
     </div>
 
-    <h3 class="vvg-section-title">Añadir amigos</h3>
-    <div *ngIf="amigosParaAgregar().length; else sinAmigosAdd">
+    <h3 class="vvg-section-title" *ngIf="!t.finalizado">Añadir amigos</h3>
+    <div *ngIf="!t.finalizado && amigosParaAgregar().length">
       <div class="member vvg-card" *ngFor="let u of amigosParaAgregar()">
         <app-avatar [user]="u" [size]="40"></app-avatar>
         <div class="bal-body"><strong>{{ u.alias }}</strong></div>
@@ -146,12 +152,12 @@
         </ion-button>
       </div>
     </div>
-    <ng-template #sinAmigosAdd><p class="vvg-muted">No hay amigos para añadir.</p></ng-template>
+    <ng-template #sinAmigosAdd><p class="vvg-muted" *ngIf="!t.finalizado">No hay amigos para añadir.</p></ng-template>
     <div style="height: 24px"></div>
   </div>
 
   <!-- FAB para agregar gasto (solo en Detalles) -->
-  <ion-fab slot="fixed" vertical="bottom" horizontal="end" *ngIf="seg === 'detalles'">
+  <ion-fab slot="fixed" vertical="bottom" horizontal="end" *ngIf="seg === 'detalles' && !t.finalizado">
     <ion-fab-button (click)="agregarGasto()"><ion-icon name="add"></ion-icon></ion-fab-button>
   </ion-fab>
 </ion-content>

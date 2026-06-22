@@ -6,6 +6,11 @@
 </ion-header>
 
 <ion-content [fullscreen]="true" class="ion-padding">
+  <div class="vvg-card empty" *ngIf="trip?.finalizado">
+    <ion-icon name="lock-closed-outline"></ion-icon>
+    <p>Este viaje esta finalizado. Puedes revisar sus gastos, pero no agregar nuevos.</p>
+  </div>
+
   <ion-item lines="none" class="field">
     <ion-input label="Titulo" labelPlacement="stacked" placeholder="Ej: Cena, gasolina..." [(ngModel)]="titulo"></ion-input>
   </ion-item>
@@ -93,5 +98,5 @@
     </div>
   </div>
 
-  <ion-button expand="block" (click)="guardar()" class="save">Guardar gasto</ion-button>
+  <ion-button expand="block" (click)="guardar()" class="save" [disabled]="trip?.finalizado">Guardar gasto</ion-button>
 </ion-content>

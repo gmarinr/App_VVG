@@ -128,6 +128,7 @@ export class AddExpensePage {
   }
 
   async guardar() {
+    if (this.trip?.finalizado) return this.show('No se pueden agregar gastos a un viaje finalizado.', 'warning');
     if (!this.titulo.trim()) return this.show('Ponle un titulo al gasto.', 'warning');
     if (!this.monto || this.monto <= 0) return this.show('Ingresa un monto valido.', 'warning');
     if (!this.participantes.size) return this.show('Selecciona al menos un participante.', 'warning');

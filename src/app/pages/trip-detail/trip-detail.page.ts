@@ -144,11 +144,13 @@ export class TripDetailPage {
   }
 
   async agregarMiembro(u: User) {
+    if (this.trip?.finalizado) return this.notify('No se puede modificar un viaje finalizado.', 'warning');
     await this.data.addMember(this.tripId, u.id);
     this.notify(`${u.alias} agregado.`);
   }
 
   async quitarMiembro(u: User) {
+    if (this.trip?.finalizado) return this.notify('No se puede modificar un viaje finalizado.', 'warning');
     if (!this.data.canRemoveMember(this.tripId, u.id)) {
       return this.notify('No se puede quitar: tiene gastos asociados.', 'warning');
     }
@@ -157,6 +159,7 @@ export class TripDetailPage {
   }
 
   async editarNombre() {
+    if (this.trip?.finalizado) return this.notify('No se puede cambiar el nombre de un viaje finalizado.', 'warning');
     const alert = await this.alertCtrl.create({
       header: 'Cambiar nombre',
       inputs: [{ name: 'v', value: this.trip?.nombre, placeholder: 'Nombre' }],
@@ -169,12 +172,59 @@ export class TripDetailPage {
   }
 
   async editarDescripcion() {
+    if (this.trip?.finalizado) return this.notify('No se puede cambiar la descripcion de un viaje finalizado.', 'warning');
     const alert = await this.alertCtrl.create({
       header: 'Cambiar descripción',
       inputs: [{ name: 'v', type: 'textarea', value: this.trip?.descripcion, placeholder: 'Descripción' }],
       buttons: [
         { text: 'Cancelar', role: 'cancel' },
         { text: 'Guardar', handler: async (d) => { await this.data.updateTrip(this.tripId, { descripcion: (d.v ?? '').trim() }); } },
+      ],
+    });
+    await alert.present();
+  }
+
+  async editarFechas() {
+    const trip = this.trip;
+    if (!trip) return;
+    if (trip.finalizado) return this.notify('No se pueden cambiar las fechas de un viaje finalizado.', 'warning');
+
+    const alert = await this.alertCtrl.create({
+      header: 'Cambiar fechas',
+      inputs: [
+        { name: 'inicio', type: 'date', value: this.dateInputValue(trip.fechaInicio), placeholder: 'Fecha de inicio' },
+        { name: 'fin', type: 'date', value: trip.fechaFin ? this.dateInputValue(trip.fechaFin) : '', placeholder: 'Fecha de termino' },
+      ],
+      buttons: [
+        { text: 'Cancelar', role: 'cancel' },
+        {
+          text: 'Guardar',
+          handler: async (d) => {
+            const inicio = typeof d.inicio === 'string' ? d.inicio : '';
+            const fin = typeof d.fin === 'string' ? d.fin : '';
+            if (!inicio) {
+              await this.notify('Selecciona una fecha de inicio.', 'warning');
+              return false;
+            }
+            if (fin && fin < inicio) {
+              await this.notify('La fecha de termino no puede ser anterior al inicio.', 'warning');
+              return false;
+            }
+
+            try {
+              await this.data.updateTrip(this.tripId, {
+                fechaInicio: this.isoFromDateInput(inicio),
+                fechaFin: fin ? this.isoFromDateInput(fin) : '',
+              });
+              await this.notify('Fechas actualizadas.');
+              return true;
+            } catch (error) {
+              console.error(error);
+              await this.notify('No se pudieron actualizar las fechas.', 'danger');
+              return false;
+            }
+          },
+        },
       ],
     });
     await alert.present();
@@ -209,6 +259,10 @@ export class TripDetailPage {
   }
 
   agregarGasto() {
+    if (this.trip?.finalizado) {
+      this.notify('No se pueden agregar gastos a un viaje finalizado.', 'warning');
+      return;
+    }
     this.router.navigate(['/viaje', this.tripId, 'agregar-gasto']);
   }
 
@@ -223,6 +277,19 @@ export class TripDetailPage {
 
   fechaLarga(iso: string): string {
     return new Date(iso).toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+
+  fechaCorta(iso: string | undefined): string {
+    if (!iso) return 'Sin fecha';
+    return new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  private dateInputValue(iso: string): string {
+    return iso.slice(0, 10);
+  }
+
+  private isoFromDateInput(value: string): string {
+    return new Date(`${value}T00:00:00`).toISOString();
   }
 
   private async notify(message: string, color = 'success') {

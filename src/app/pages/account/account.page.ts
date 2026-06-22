@@ -47,13 +47,16 @@ export class AccountPage {
         {
           text: 'Guardar',
           handler: async (d) => {
-            if (!this.me) return;
+            if (!this.me) return false;
+            const descripcion = typeof d.v === 'string' ? d.v.trim() : '';
             try {
-              await this.data.updateUser(this.me.id, { descripcion: (d.v ?? '').trim() });
+              await this.data.updateUser(this.me.id, { descripcion });
               await this.show('Perfil actualizado.', 'success');
+              return true;
             } catch (error) {
               console.error(error);
               await this.show('No se pudo actualizar el perfil.', 'danger');
+              return false;
             }
           },
         },

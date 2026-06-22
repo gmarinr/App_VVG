@@ -2,7 +2,7 @@
   <ion-toolbar>
     <ion-buttons slot="start"><ion-back-button [defaultHref]="'/viaje/' + tripId"></ion-back-button></ion-buttons>
     <ion-title>Detalle del gasto</ion-title>
-    <ion-buttons slot="end">
+    <ion-buttons slot="end" *ngIf="!tripFinalizado">
       <ion-button color="danger" (click)="eliminar()"><ion-icon slot="icon-only" name="trash-outline"></ion-icon></ion-button>
     </ion-buttons>
   </ion-toolbar>

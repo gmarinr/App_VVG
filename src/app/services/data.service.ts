@@ -174,8 +174,25 @@ export class DataService {
 
   async updateUser(userId: string, patch: Partial<User>): Promise<void> {
     const row = await this.buildProfileUpsertRow(userId, patch);
-    const { error } = await this.supabase.client.from('profiles').upsert(row, { onConflict: 'id' });
+    const { data: sessionData } = await this.supabase.client.auth.getSession();
+    if (sessionData.session?.user.id !== userId) {
+      throw new Error('Solo puedes actualizar tu propio perfil.');
+    }
+
+    const { id, ...profileUpdate } = row;
+    const { data, error } = await this.supabase.client
+      .from('profiles')
+      .update(profileUpdate)
+      .eq('id', id)
+      .select('id,email,nombre,alias,descripcion,avatar_color')
+      .maybeSingle<ProfileRow>();
     this.throwIfError(error);
+
+    if (!data) {
+      const { error: insertError } = await this.supabase.client.from('profiles').insert(row);
+      this.throwIfError(insertError);
+    }
+
     await this.loadUsers();
   }
 
@@ -292,6 +309,16 @@ export class DataService {
   }
 
   async updateTrip(tripId: string, patch: Partial<Trip>): Promise<void> {
+    const trip = this.getTrip(tripId);
+    const protectedFields = patch.nombre !== undefined
+      || patch.descripcion !== undefined
+      || patch.tipo !== undefined
+      || patch.fechaInicio !== undefined
+      || patch.fechaFin !== undefined;
+    if (trip?.finalizado && protectedFields) {
+      throw new Error('No se puede editar un viaje finalizado.');
+    }
+
     const update: Partial<TripRow> = {};
     if (patch.nombre !== undefined) update.nombre = patch.nombre;
     if (patch.descripcion !== undefined) update.descripcion = patch.descripcion;
@@ -322,6 +349,9 @@ export class DataService {
   }
 
   async addMember(tripId: string, userId: string): Promise<void> {
+    if (this.getTrip(tripId)?.finalizado) {
+      throw new Error('No se puede modificar un viaje finalizado.');
+    }
     const { data } = await this.supabase.client.auth.getSession();
     const addedBy = data.session?.user.id ?? null;
 
@@ -348,11 +378,12 @@ export class DataService {
 
   canRemoveMember(tripId: string, userId: string): boolean {
     const trip = this.getTrip(tripId);
-    if (!trip || trip.ownerId === userId) return false;
+    if (!trip || trip.finalizado || trip.ownerId === userId) return false;
     return !this.tripExpenses(tripId).some((e) => e.pagadoPor === userId || e.participantes.includes(userId));
   }
 
   async removeMember(tripId: string, userId: string): Promise<boolean> {
+    if (this.getTrip(tripId)?.finalizado) return false;
     if (!this.canRemoveMember(tripId, userId)) return false;
 
     const groupChat = this.chats().find((c) => c.tripId === tripId);
@@ -407,6 +438,9 @@ export class DataService {
     const { data: sessionData } = await this.supabase.client.auth.getSession();
     const createdBy = sessionData.session?.user.id;
     if (!createdBy) throw new Error('No hay sesion activa.');
+    if (this.getTrip(data.tripId)?.finalizado) {
+      throw new Error('No se pueden agregar gastos a un viaje finalizado.');
+    }
 
     const participantes = data.participantes.length ? data.participantes : [data.pagadoPor];
     const metodoReparto = data.metodoReparto ?? 'equal';
@@ -445,6 +479,11 @@ export class DataService {
   }
 
   async deleteExpense(id: string): Promise<void> {
+    const expense = this.getExpense(id);
+    if (expense && this.getTrip(expense.tripId)?.finalizado) {
+      throw new Error('No se pueden eliminar gastos de un viaje finalizado.');
+    }
+
     const { error } = await this.supabase.client.from('expenses').update({ deleted_at: new Date().toISOString() }).eq('id', id);
     this.throwIfError(error);
     await this.loadExpenses();
@@ -462,6 +501,12 @@ export class DataService {
       .sort((a, b) => +new Date(b.paidAt ?? b.createdAt) - +new Date(a.paidAt ?? a.createdAt));
   }
 
+  tripPendingPayments(tripId: string): Payment[] {
+    return this.payments()
+      .filter((p) => p.tripId === tripId && p.status === 'pending')
+      .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+  }
+
   async addPayment(data: {
     tripId: string;
     fromUserId: string;
@@ -474,7 +519,6 @@ export class DataService {
     if (data.fromUserId === data.toUserId) throw new Error('El pago necesita dos usuarios distintos.');
     if (!Number.isFinite(data.monto) || data.monto <= 0) throw new Error('El monto pagado debe ser mayor que cero.');
 
-    const now = new Date().toISOString();
     const { data: row, error } = await this.supabase.client
       .from('payments')
       .insert({
@@ -482,15 +526,34 @@ export class DataService {
         from_user_id: data.fromUserId,
         to_user_id: data.toUserId,
         monto: data.monto,
-        status: 'paid',
+        status: 'pending',
         created_by: createdBy,
-        paid_at: now,
+        paid_at: null,
       })
       .select('id,trip_id,from_user_id,to_user_id,monto,status,created_by,paid_at,created_at')
       .single<PaymentRow>();
     this.throwIfError(error);
 
     if (!row) throw new Error('No se pudo registrar el pago.');
+
+    await this.loadPayments();
+    return this.mapPayment(row);
+  }
+
+  async confirmPayment(paymentId: string): Promise<Payment> {
+    const paidAt = new Date().toISOString();
+    const { data: row, error } = await this.supabase.client
+      .from('payments')
+      .update({
+        status: 'paid',
+        paid_at: paidAt,
+      })
+      .eq('id', paymentId)
+      .select('id,trip_id,from_user_id,to_user_id,monto,status,created_by,paid_at,created_at')
+      .maybeSingle<PaymentRow>();
+    this.throwIfError(error);
+
+    if (!row) throw new Error('No se pudo confirmar el pago.');
 
     await this.loadPayments();
     return this.mapPayment(row);
@@ -640,13 +703,21 @@ export class DataService {
     const authUser = data.session?.user;
     if (!authUser) return;
 
+    const { data: existing, error: existingError } = await this.supabase.client
+      .from('profiles')
+      .select('id')
+      .eq('id', authUser.id)
+      .maybeSingle<{ id: string }>();
+    this.throwIfError(existingError);
+    if (existing) return;
+
     const row = await this.buildProfileUpsertRow(authUser.id, {
       email: authUser.email ?? '',
       nombre: this.metadataText(authUser.user_metadata, 'nombre') || this.metadataText(authUser.user_metadata, 'name') || undefined,
       alias: this.metadataText(authUser.user_metadata, 'alias') || undefined,
     });
 
-    const { error } = await this.supabase.client.from('profiles').upsert(row, { onConflict: 'id' });
+    const { error } = await this.supabase.client.from('profiles').insert(row);
     this.throwIfError(error);
   }
 

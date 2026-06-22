@@ -41,6 +41,10 @@ export class ExpenseDetailPage {
     return this.data.getExpense(this.expenseId);
   }
 
+  get tripFinalizado(): boolean {
+    return !!this.data.getTrip(this.tripId)?.finalizado;
+  }
+
   get pagador(): User | undefined {
     return this.expense ? this.data.getUser(this.expense.pagadoPor) : undefined;
   }
@@ -76,6 +80,17 @@ export class ExpenseDetailPage {
   }
 
   async eliminar() {
+    if (this.tripFinalizado) {
+      const t = await this.toast.create({
+        message: 'No se pueden eliminar gastos de un viaje finalizado.',
+        duration: 1600,
+        color: 'warning',
+        position: 'top',
+      });
+      await t.present();
+      return;
+    }
+
     const alert = await this.alertCtrl.create({
       header: 'Eliminar gasto',
       message: 'Seguro que quieres eliminar este gasto?',
@@ -85,10 +100,16 @@ export class ExpenseDetailPage {
           text: 'Eliminar',
           role: 'destructive',
           handler: async () => {
-            await this.data.deleteExpense(this.expenseId);
-            const t = await this.toast.create({ message: 'Gasto eliminado.', duration: 1500, color: 'medium', position: 'top' });
-            await t.present();
-            this.router.navigate(['/viaje', this.tripId]);
+            try {
+              await this.data.deleteExpense(this.expenseId);
+              const t = await this.toast.create({ message: 'Gasto eliminado.', duration: 1500, color: 'medium', position: 'top' });
+              await t.present();
+              this.router.navigate(['/viaje', this.tripId]);
+            } catch (error) {
+              console.error(error);
+              const t = await this.toast.create({ message: 'No se pudo eliminar el gasto.', duration: 1600, color: 'danger', position: 'top' });
+              await t.present();
+            }
           },
         },
       ],

@@ -83,6 +83,23 @@
                   <p class="payment-amount" [class.receive]="p.direction === 'receive'" [class.pay]="p.direction === 'pay'">
                     Pendiente {{ p.monto | money }}
                   </p>
+
+                  <ion-note color="warning" class="payment-note" *ngFor="let payment of p.confirmations">
+                    {{ confirmationMessage(p, payment) }}
+                    <ion-button
+                      size="small"
+                      fill="solid"
+                      color="success"
+                      (click)="confirmReportedPayment(payment)"
+                      [disabled]="savingPaymentId === payment.id"
+                    >
+                      <strong>Confirmar</strong>
+                    </ion-button>
+                  </ion-note>
+
+                  <ion-note color="medium" class="payment-note" *ngFor="let payment of p.waitingConfirmations">
+                    {{ waitingConfirmationMessage(p, payment) }}
+                  </ion-note>
                 </ion-label>
               </ion-col>
 
@@ -108,7 +125,14 @@
                       <ion-button size="small" fill="outline" expand="block" (click)="setFullPayment(p)">Completo</ion-button>
                     </ion-col>
                     <ion-col size="6">
-                      <ion-button size="small" expand="block" (click)="confirmPayment(p)" [disabled]="savingPaymentId === p.id">Guardar</ion-button>
+                      <ion-button
+                        size="small"
+                        expand="block"
+                        (click)="confirmPayment(p)"
+                        [disabled]="savingPaymentId === p.id || p.waitingConfirmations.length > 0"
+                      >
+                        Guardar
+                      </ion-button>
                     </ion-col>
                   </ion-row>
                 </ion-grid>
