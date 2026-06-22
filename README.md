@@ -67,10 +67,10 @@ La capa de datos está aislada en `services/`, de modo que migrar a Supabase imp
 
 ## 🗺️ Roadmap
 
-- [ ] Integración con **Supabase** (base de datos + Auth real).
-- [ ] División de gastos **ponderada** (porcentajes o montos exactos), hoy solo partes iguales.
+- [X] Integración con **Supabase** (base de datos + Auth real).
+- [X] División de gastos **ponderada** (porcentajes o montos exactos), hoy solo partes iguales.
 - [ ] Marcar pagos como realizados / liquidados.
-- [ ] Subida real de fotos a almacenamiento en la nube.
+- [X] Subida real de fotos a almacenamiento en la nube.
 - [ ] Notificaciones de mensajes no leídos y estado de presencia.
 - [ ] Logo definitivo de la app.
 
