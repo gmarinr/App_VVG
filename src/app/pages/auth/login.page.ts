@@ -70,7 +70,7 @@ export class LoginPage {
   constructor(private auth: AuthService, private router: Router, private toast: ToastController) {}
 
   async login() {
-    const err = this.auth.login(this.email, this.password);
+    const err = await this.auth.login(this.email, this.password);
     if (err) {
       const t = await this.toast.create({ message: err, duration: 2000, color: 'danger', position: 'top' });
       await t.present();

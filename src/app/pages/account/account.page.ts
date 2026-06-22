@@ -30,7 +30,8 @@ export class AccountPage {
   ) {}
 
   get me(): User | null {
-    return this.auth.currentUser();
+    const authUser = this.auth.currentUser();
+    return authUser ? this.data.getUser(authUser.id) ?? authUser : null;
   }
 
   get amigos(): User[] {
@@ -43,7 +44,19 @@ export class AccountPage {
       inputs: [{ name: 'v', type: 'textarea', value: this.me?.descripcion, placeholder: 'Cuéntanos algo de ti...' }],
       buttons: [
         { text: 'Cancelar', role: 'cancel' },
-        { text: 'Guardar', handler: (d) => { if (this.me) this.data.updateUser(this.me.id, { descripcion: (d.v ?? '').trim() }); } },
+        {
+          text: 'Guardar',
+          handler: async (d) => {
+            if (!this.me) return;
+            try {
+              await this.data.updateUser(this.me.id, { descripcion: (d.v ?? '').trim() });
+              await this.show('Perfil actualizado.', 'success');
+            } catch (error) {
+              console.error(error);
+              await this.show('No se pudo actualizar el perfil.', 'danger');
+            }
+          },
+        },
       ],
     });
     await alert.present();
@@ -55,7 +68,19 @@ export class AccountPage {
       inputs: [{ name: 'v', value: this.me?.alias, placeholder: 'Alias' }],
       buttons: [
         { text: 'Cancelar', role: 'cancel' },
-        { text: 'Guardar', handler: (d) => { if (d.v?.trim() && this.me) this.data.updateUser(this.me.id, { alias: d.v.trim() }); } },
+        {
+          text: 'Guardar',
+          handler: async (d) => {
+            if (!d.v?.trim() || !this.me) return;
+            try {
+              await this.data.updateUser(this.me.id, { alias: d.v.trim() });
+              await this.show('Alias actualizado.', 'success');
+            } catch (error) {
+              console.error(error);
+              await this.show('No se pudo actualizar el alias.', 'danger');
+            }
+          },
+        },
       ],
     });
     await alert.present();
@@ -69,6 +94,33 @@ export class AccountPage {
     this.router.navigate(['/perfil', u.id]);
   }
 
+  async eliminarAmigo(u: User, ev?: Event) {
+    ev?.stopPropagation();
+    if (!this.me) return;
+
+    const alert = await this.alertCtrl.create({
+      header: 'Eliminar amigo',
+      message: `Quieres eliminar a ${u.alias} de tus amigos?`,
+      buttons: [
+        { text: 'Cancelar', role: 'cancel' },
+        {
+          text: 'Eliminar',
+          role: 'destructive',
+          handler: async () => {
+            try {
+              await this.data.removeFriend(this.me!.id, u.id);
+              await this.show('Amigo eliminado.', 'medium');
+            } catch (error) {
+              console.error(error);
+              await this.show('No se pudo eliminar el amigo.', 'danger');
+            }
+          },
+        },
+      ],
+    });
+    await alert.present();
+  }
+
   async resetDemo() {
     const alert = await this.alertCtrl.create({
       header: 'Reiniciar demo',
@@ -79,7 +131,7 @@ export class AccountPage {
           text: 'Reiniciar',
           handler: async () => {
             this.data.resetDemo();
-            this.auth.logout();
+            await this.auth.logout();
             const t = await this.toast.create({ message: 'Datos reiniciados.', duration: 1500, color: 'medium', position: 'top' });
             await t.present();
             this.router.navigateByUrl('/login');
@@ -90,8 +142,13 @@ export class AccountPage {
     await alert.present();
   }
 
-  logout() {
-    this.auth.logout();
+  async logout() {
+    await this.auth.logout();
     this.router.navigateByUrl('/login');
+  }
+
+  private async show(message: string, color: string) {
+    const t = await this.toast.create({ message, duration: 1700, color, position: 'top' });
+    await t.present();
   }
 }

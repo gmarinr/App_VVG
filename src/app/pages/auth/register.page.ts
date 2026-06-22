@@ -63,8 +63,12 @@ export class RegisterPage {
     if (!this.email.trim() || !this.password || !this.nombre.trim() || !this.alias.trim()) {
       return this.show('Completa todos los campos.', 'warning');
     }
-    const err = this.auth.register({ email: this.email, password: this.password, nombre: this.nombre, alias: this.alias });
-    if (err) return this.show(err, 'danger');
+    const err = await this.auth.register({ email: this.email, password: this.password, nombre: this.nombre, alias: this.alias });
+    if (err) {
+      await this.show(err, err.startsWith('Cuenta creada') ? 'success' : 'danger');
+      if (err.startsWith('Cuenta creada')) this.router.navigateByUrl('/login');
+      return;
+    }
     this.router.navigateByUrl('/tabs/inicio');
   }
 

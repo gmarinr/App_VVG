@@ -1,24 +1,92 @@
 import { Injectable, signal } from '@angular/core';
-import { StorageService } from './storage.service';
-import {
-  ActivityType,
-  Chat,
-  Expense,
-  Message,
-  Photo,
-  Trip,
-  User,
-} from '../models/models';
+import { ActivityType, Chat, Expense, ExpenseParticipantShare, ExpenseSplitMethod, Message, Photo, Trip, User } from '../models/models';
+import { SupabaseService } from './supabase.service';
 
-// Genera ids cortos únicos (suficiente para un MVP local).
-const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+type FriendshipStatus = 'pending' | 'accepted' | 'blocked';
+type ChatType = 'dm' | 'grupo';
 
-const AVATAR_COLORS = ['#5b5fc7', '#e8505b', '#2ec4b6', '#ff9f1c', '#9b5de5', '#3a86ff', '#06d6a0', '#f15bb5'];
-const colorFor = (seed: string) => AVATAR_COLORS[Math.abs([...seed].reduce((a, c) => a + c.charCodeAt(0), 0)) % AVATAR_COLORS.length];
+interface ProfileRow {
+  id: string;
+  email: string;
+  nombre: string;
+  alias: string;
+  descripcion: string | null;
+  avatar_color: string;
+}
+
+interface FriendshipRow {
+  user_id: string;
+  friend_id: string;
+  status: FriendshipStatus;
+}
+
+interface TripRow {
+  id: string;
+  owner_id: string;
+  nombre: string;
+  descripcion: string;
+  tipo: ActivityType;
+  fecha_inicio: string;
+  fecha_fin: string | null;
+  finalizado: boolean;
+  created_at: string;
+}
+
+interface TripMemberRow {
+  trip_id: string;
+  user_id: string;
+}
+
+interface ExpenseRow {
+  id: string;
+  trip_id: string;
+  titulo: string;
+  monto: number | string;
+  pagado_por: string;
+  metodo_reparto: ExpenseSplitMethod;
+  fecha: string;
+  created_at: string;
+}
+
+interface ExpenseParticipantRow {
+  expense_id: string;
+  user_id: string;
+  weight: number | string;
+  share_amount: number | string | null;
+  share_percentage: number | string | null;
+}
+
+interface PhotoRow {
+  id: string;
+  trip_id: string;
+  storage_path: string;
+  uploaded_by: string;
+  fecha: string;
+}
+
+interface ChatRow {
+  id: string;
+  tipo: ChatType;
+  nombre: string | null;
+  trip_id: string | null;
+}
+
+interface ChatMemberRow {
+  chat_id: string;
+  user_id: string;
+  last_read_at: string | null;
+}
+
+interface MessageRow {
+  id: string;
+  chat_id: string;
+  sender_id: string;
+  texto: string;
+  fecha: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class DataService {
-  // Estado reactivo en memoria, espejado a localStorage.
   readonly users = signal<User[]>([]);
   readonly trips = signal<Trip[]>([]);
   readonly expenses = signal<Expense[]>([]);
@@ -26,33 +94,27 @@ export class DataService {
   readonly chats = signal<Chat[]>([]);
   readonly messages = signal<Message[]>([]);
 
-  constructor(private storage: StorageService) {
-    this.load();
-    if (this.users().length === 0) {
-      this.seed();
+  constructor(private supabase: SupabaseService) {
+    void this.initialize();
+  }
+
+  async refreshAll(): Promise<void> {
+    const { data } = await this.supabase.client.auth.getSession();
+    if (!data.session?.user) {
+      this.clear();
+      return;
     }
+
+    await this.ensureCurrentProfile();
+    await this.loadUsers();
+    await Promise.all([
+      this.loadTrips(),
+      this.loadExpenses(),
+      this.loadPhotos(),
+      this.loadChatsAndMessages(),
+    ]);
   }
 
-  // ---------- Persistencia ----------
-  private load() {
-    this.users.set(this.storage.get<User[]>('users', []));
-    this.trips.set(this.storage.get<Trip[]>('trips', []));
-    this.expenses.set(this.storage.get<Expense[]>('expenses', []));
-    this.photos.set(this.storage.get<Photo[]>('photos', []));
-    this.chats.set(this.storage.get<Chat[]>('chats', []));
-    this.messages.set(this.storage.get<Message[]>('messages', []));
-  }
-
-  private persist() {
-    this.storage.set('users', this.users());
-    this.storage.set('trips', this.trips());
-    this.storage.set('expenses', this.expenses());
-    this.storage.set('photos', this.photos());
-    this.storage.set('chats', this.chats());
-    this.storage.set('messages', this.messages());
-  }
-
-  // ---------- Usuarios / amigos ----------
   getUser(id: string): User | undefined {
     return this.users().find((u) => u.id === id);
   }
@@ -63,65 +125,83 @@ export class DataService {
     return u.friendIds.map((id) => this.getUser(id)).filter((x): x is User => !!x);
   }
 
-  // Amigos potenciales = usuarios que aún no son amigos ni yo mismo.
   getNonFriends(userId: string): User[] {
     const u = this.getUser(userId);
-    if (!u) return [];
-    return this.users().filter((x) => x.id !== userId && !u.friendIds.includes(x.id));
+    const friendIds = new Set(u?.friendIds ?? []);
+    return this.users().filter((x) => x.id !== userId && !friendIds.has(x.id));
   }
 
   createUser(data: { email: string; password: string; nombre: string; alias: string }): User {
     const user: User = {
-      id: uid(),
+      id: this.uuid(),
       email: data.email,
-      password: data.password,
+      password: '',
       nombre: data.nombre,
       alias: data.alias,
       descripcion: '',
-      avatarColor: colorFor(data.alias || data.email),
+      avatarColor: '#5b5fc7',
       friendIds: [],
     };
     this.users.update((arr) => [...arr, user]);
-    this.persist();
     return user;
   }
 
-  updateUser(userId: string, patch: Partial<User>) {
-    this.users.update((arr) => arr.map((u) => (u.id === userId ? { ...u, ...patch } : u)));
-    this.persist();
+  async updateUser(userId: string, patch: Partial<User>): Promise<void> {
+    const row = await this.buildProfileUpsertRow(userId, patch);
+    const { error } = await this.supabase.client.from('profiles').upsert(row, { onConflict: 'id' });
+    this.throwIfError(error);
+    await this.loadUsers();
   }
 
-  addFriend(userId: string, friendId: string) {
+  async addFriend(userId: string, friendId: string): Promise<void> {
     if (userId === friendId) return;
-    // Amistad bidireccional.
-    this.users.update((arr) =>
-      arr.map((u) => {
-        if (u.id === userId && !u.friendIds.includes(friendId)) return { ...u, friendIds: [...u.friendIds, friendId] };
-        if (u.id === friendId && !u.friendIds.includes(userId)) return { ...u, friendIds: [...u.friendIds, userId] };
-        return u;
-      })
+    const friend = this.getUser(friendId);
+    if (!friend) throw new Error('Ese perfil no existe en la tabla profiles.');
+
+    const [a, b] = [userId, friendId].sort();
+
+    const { error } = await this.supabase.client.from('friendships').upsert(
+      {
+        user_id: a,
+        friend_id: b,
+        requested_by: userId,
+        status: 'accepted',
+        accepted_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,friend_id' }
     );
-    this.persist();
+    this.throwIfError(error);
+    await this.loadUsers();
   }
 
-  // ---------- Viajes / salidas ----------
+  async removeFriend(userId: string, friendId: string): Promise<void> {
+    if (userId === friendId) return;
+    const [a, b] = [userId, friendId].sort();
+
+    const { error } = await this.supabase.client
+      .from('friendships')
+      .delete()
+      .eq('user_id', a)
+      .eq('friend_id', b);
+    this.throwIfError(error);
+    await this.loadUsers();
+  }
+
   getTrip(id: string): Trip | undefined {
     return this.trips().find((t) => t.id === id);
   }
 
-  // Viajes en los que participa el usuario (es miembro u owner).
   tripsForUser(userId: string): Trip[] {
     return this.trips()
       .filter((t) => t.memberIds.includes(userId))
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
   }
 
-  // Viaje "actual": el más reciente no finalizado del usuario.
   currentTrip(userId: string): Trip | undefined {
     return this.tripsForUser(userId).find((t) => !t.finalizado);
   }
 
-  createTrip(data: {
+  async createTrip(data: {
     nombre: string;
     descripcion: string;
     tipo: ActivityType;
@@ -129,69 +209,146 @@ export class DataService {
     fechaFin?: string;
     ownerId: string;
     memberIds: string[];
-  }): Trip {
+  }): Promise<Trip> {
     const members = Array.from(new Set([data.ownerId, ...data.memberIds]));
-    const trip: Trip = {
-      id: uid(),
-      nombre: data.nombre,
-      descripcion: data.descripcion,
-      tipo: data.tipo,
-      fechaInicio: data.fechaInicio,
-      fechaFin: data.fechaFin,
-      ownerId: data.ownerId,
-      memberIds: members,
-      finalizado: false,
-      createdAt: new Date().toISOString(),
-    };
-    this.trips.update((arr) => [...arr, trip]);
-    // Chat de grupo automático para el viaje.
-    this.chats.update((arr) => [
-      ...arr,
-      { id: uid(), tipo: 'grupo', nombre: trip.nombre, memberIds: members, tripId: trip.id },
-    ]);
-    this.persist();
-    return trip;
-  }
+    const { data: tripRow, error } = await this.supabase.client
+      .from('trips')
+      .insert({
+        owner_id: data.ownerId,
+        nombre: data.nombre,
+        descripcion: data.descripcion,
+        tipo: data.tipo,
+        fecha_inicio: this.toDateOnly(data.fechaInicio),
+        fecha_fin: data.fechaFin ? this.toDateOnly(data.fechaFin) : null,
+        finalizado: false,
+      })
+      .select('id,owner_id,nombre,descripcion,tipo,fecha_inicio,fecha_fin,finalizado,created_at')
+      .single<TripRow>();
+    this.throwIfError(error);
 
-  updateTrip(tripId: string, patch: Partial<Trip>) {
-    this.trips.update((arr) => arr.map((t) => (t.id === tripId ? { ...t, ...patch } : t)));
-    // Mantener el nombre del chat de grupo sincronizado.
-    if (patch.nombre) {
-      this.chats.update((arr) => arr.map((c) => (c.tripId === tripId ? { ...c, nombre: patch.nombre } : c)));
+    if (!tripRow) throw new Error('No se pudo crear el viaje.');
+
+    const { error: membersError } = await this.supabase.client.from('trip_members').insert(
+      members.map((userId) => ({
+        trip_id: tripRow.id,
+        user_id: userId,
+        role: userId === data.ownerId ? 'owner' : 'member',
+        added_by: data.ownerId,
+      }))
+    );
+    this.throwIfError(membersError);
+
+    const { data: chatRow, error: chatError } = await this.supabase.client
+      .from('chats')
+      .insert({
+        tipo: 'grupo',
+        nombre: tripRow.nombre,
+        trip_id: tripRow.id,
+        created_by: data.ownerId,
+      })
+      .select('id,tipo,nombre,trip_id')
+      .single<ChatRow>();
+    this.throwIfError(chatError);
+
+    if (chatRow) {
+      const { error: chatMembersError } = await this.supabase.client.from('chat_members').insert(
+        members.map((userId) => ({
+          chat_id: chatRow.id,
+          user_id: userId,
+          role: userId === data.ownerId ? 'admin' : 'member',
+        }))
+      );
+      this.throwIfError(chatMembersError);
     }
-    this.persist();
+
+    await this.refreshAll();
+    return this.mapTrip(tripRow, members);
   }
 
-  addMember(tripId: string, userId: string) {
-    this.trips.update((arr) =>
-      arr.map((t) => (t.id === tripId && !t.memberIds.includes(userId) ? { ...t, memberIds: [...t.memberIds, userId] } : t))
-    );
-    this.chats.update((arr) =>
-      arr.map((c) => (c.tripId === tripId && !c.memberIds.includes(userId) ? { ...c, memberIds: [...c.memberIds, userId] } : c))
-    );
-    this.persist();
+  async updateTrip(tripId: string, patch: Partial<Trip>): Promise<void> {
+    const update: Partial<TripRow> = {};
+    if (patch.nombre !== undefined) update.nombre = patch.nombre;
+    if (patch.descripcion !== undefined) update.descripcion = patch.descripcion;
+    if (patch.tipo !== undefined) update.tipo = patch.tipo;
+    if (patch.fechaInicio !== undefined) update.fecha_inicio = this.toDateOnly(patch.fechaInicio);
+    if (patch.fechaFin !== undefined) update.fecha_fin = patch.fechaFin ? this.toDateOnly(patch.fechaFin) : null;
+    if (patch.finalizado !== undefined) update.finalizado = patch.finalizado;
+
+    if (Object.keys(update).length) {
+      const { error } = await this.supabase.client.from('trips').update(update).eq('id', tripId);
+      this.throwIfError(error);
+    }
+
+    if (patch.nombre) {
+      const { error } = await this.supabase.client.from('chats').update({ nombre: patch.nombre }).eq('trip_id', tripId);
+      this.throwIfError(error);
+    }
+
+    await this.refreshAll();
   }
 
-  // Solo se puede quitar a alguien sin gastos asociados.
+  async addMember(tripId: string, userId: string): Promise<void> {
+    const { data } = await this.supabase.client.auth.getSession();
+    const addedBy = data.session?.user.id ?? null;
+
+    const { error } = await this.supabase.client.from('trip_members').insert({
+      trip_id: tripId,
+      user_id: userId,
+      role: 'member',
+      added_by: addedBy,
+    });
+    this.throwIfError(error);
+
+    const groupChat = this.chats().find((c) => c.tripId === tripId);
+    if (groupChat) {
+      const { error: chatError } = await this.supabase.client.from('chat_members').insert({
+        chat_id: groupChat.id,
+        user_id: userId,
+        role: 'member',
+      });
+      this.throwIfError(chatError);
+    }
+
+    await this.refreshAll();
+  }
+
   canRemoveMember(tripId: string, userId: string): boolean {
     const trip = this.getTrip(tripId);
     if (!trip || trip.ownerId === userId) return false;
     return !this.tripExpenses(tripId).some((e) => e.pagadoPor === userId || e.participantes.includes(userId));
   }
 
-  removeMember(tripId: string, userId: string): boolean {
+  async removeMember(tripId: string, userId: string): Promise<boolean> {
     if (!this.canRemoveMember(tripId, userId)) return false;
-    this.trips.update((arr) => arr.map((t) => (t.id === tripId ? { ...t, memberIds: t.memberIds.filter((id) => id !== userId) } : t)));
-    this.chats.update((arr) => arr.map((c) => (c.tripId === tripId ? { ...c, memberIds: c.memberIds.filter((id) => id !== userId) } : c)));
-    this.persist();
+
+    const groupChat = this.chats().find((c) => c.tripId === tripId);
+    if (groupChat) {
+      const { error: chatError } = await this.supabase.client
+        .from('chat_members')
+        .delete()
+        .eq('chat_id', groupChat.id)
+        .eq('user_id', userId);
+      this.throwIfError(chatError);
+    }
+
+    const { error } = await this.supabase.client
+      .from('trip_members')
+      .delete()
+      .eq('trip_id', tripId)
+      .eq('user_id', userId);
+    this.throwIfError(error);
+
+    await this.refreshAll();
     return true;
   }
 
-  finalizeTrip(tripId: string) {
-    this.updateTrip(tripId, { finalizado: true, fechaFin: this.getTrip(tripId)?.fechaFin ?? new Date().toISOString() });
+  async finalizeTrip(tripId: string): Promise<void> {
+    await this.updateTrip(tripId, {
+      finalizado: true,
+      fechaFin: this.getTrip(tripId)?.fechaFin ?? new Date().toISOString(),
+    });
   }
 
-  // ---------- Gastos ----------
   tripExpenses(tripId: string): Expense[] {
     return this.expenses()
       .filter((e) => e.tripId === tripId)
@@ -202,48 +359,91 @@ export class DataService {
     return this.expenses().find((e) => e.id === id);
   }
 
-  addExpense(data: {
+  async addExpense(data: {
     tripId: string;
     titulo: string;
     monto: number;
     pagadoPor: string;
     participantes: string[];
+    metodoReparto?: ExpenseSplitMethod;
+    participantShares?: ExpenseParticipantShare[];
     fecha: string;
-  }): Expense {
-    const expense: Expense = {
-      id: uid(),
-      tripId: data.tripId,
-      titulo: data.titulo,
-      monto: data.monto,
-      pagadoPor: data.pagadoPor,
-      participantes: data.participantes.length ? data.participantes : [data.pagadoPor],
-      fecha: data.fecha,
-      createdAt: new Date().toISOString(),
-    };
-    this.expenses.update((arr) => [...arr, expense]);
-    this.persist();
-    return expense;
+  }): Promise<Expense> {
+    const { data: sessionData } = await this.supabase.client.auth.getSession();
+    const createdBy = sessionData.session?.user.id;
+    if (!createdBy) throw new Error('No hay sesion activa.');
+
+    const participantes = data.participantes.length ? data.participantes : [data.pagadoPor];
+    const metodoReparto = data.metodoReparto ?? 'equal';
+    const participantShares = this.normalizeExpenseShares(participantes, metodoReparto, data.participantShares);
+    const { data: expenseRow, error } = await this.supabase.client
+      .from('expenses')
+      .insert({
+        trip_id: data.tripId,
+        titulo: data.titulo,
+        monto: data.monto,
+        moneda: 'CLP',
+        pagado_por: data.pagadoPor,
+        fecha: this.toDateOnly(data.fecha),
+        metodo_reparto: metodoReparto,
+        created_by: createdBy,
+      })
+      .select('id,trip_id,titulo,monto,pagado_por,metodo_reparto,fecha,created_at')
+      .single<ExpenseRow>();
+    this.throwIfError(error);
+
+    if (!expenseRow) throw new Error('No se pudo crear el gasto.');
+
+    const { error: participantsError } = await this.supabase.client.from('expense_participants').insert(
+      participantShares.map((share) => ({
+        expense_id: expenseRow.id,
+        user_id: share.userId,
+        weight: share.weight,
+        share_amount: share.shareAmount ?? null,
+        share_percentage: share.sharePercentage ?? null,
+      }))
+    );
+    this.throwIfError(participantsError);
+
+    await this.loadExpenses();
+    return this.mapExpense(expenseRow, participantShares);
   }
 
-  deleteExpense(id: string) {
-    this.expenses.update((arr) => arr.filter((e) => e.id !== id));
-    this.persist();
+  async deleteExpense(id: string): Promise<void> {
+    const { error } = await this.supabase.client.from('expenses').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+    this.throwIfError(error);
+    await this.loadExpenses();
   }
 
-  // ---------- Fotos ----------
   tripPhotos(tripId: string): Photo[] {
     return this.photos()
       .filter((p) => p.tripId === tripId)
       .sort((a, b) => +new Date(b.fecha) - +new Date(a.fecha));
   }
 
-  addPhoto(tripId: string, dataUrl: string, uploadedBy: string) {
-    const photo: Photo = { id: uid(), tripId, dataUrl, uploadedBy, fecha: new Date().toISOString() };
-    this.photos.update((arr) => [...arr, photo]);
-    this.persist();
+  async addPhoto(tripId: string, dataUrl: string, uploadedBy: string): Promise<void> {
+    const id = this.uuid();
+    const { blob, extension, contentType } = this.dataUrlToBlob(dataUrl);
+    const storagePath = `${tripId}/${id}.${extension}`;
+
+    const { error: uploadError } = await this.supabase.client.storage
+      .from('trip-photos')
+      .upload(storagePath, blob, { contentType, upsert: false });
+    this.throwIfError(uploadError);
+
+    const { error } = await this.supabase.client.from('trip_photos').insert({
+      id,
+      trip_id: tripId,
+      storage_path: storagePath,
+      uploaded_by: uploadedBy,
+      fecha: new Date().toISOString(),
+    });
+    this.throwIfError(error);
+
+    this.photos.update((arr) => [...arr, { id, tripId, dataUrl, uploadedBy, fecha: new Date().toISOString() }]);
+    await this.loadPhotos();
   }
 
-  // ---------- Chats / mensajes ----------
   chatsForUser(userId: string): Chat[] {
     return this.chats().filter((c) => c.memberIds.includes(userId));
   }
@@ -252,16 +452,29 @@ export class DataService {
     return this.chats().find((c) => c.id === id);
   }
 
-  // Devuelve (creando si hace falta) el DM entre dos usuarios.
-  getOrCreateDm(userA: string, userB: string): Chat {
+  async getOrCreateDm(userA: string, userB: string): Promise<Chat> {
     const existing = this.chats().find(
       (c) => c.tipo === 'dm' && c.memberIds.length === 2 && c.memberIds.includes(userA) && c.memberIds.includes(userB)
     );
     if (existing) return existing;
-    const chat: Chat = { id: uid(), tipo: 'dm', memberIds: [userA, userB] };
-    this.chats.update((arr) => [...arr, chat]);
-    this.persist();
-    return chat;
+
+    const { data: chatRow, error } = await this.supabase.client
+      .from('chats')
+      .insert({ tipo: 'dm', created_by: userA })
+      .select('id,tipo,nombre,trip_id')
+      .single<ChatRow>();
+    this.throwIfError(error);
+
+    if (!chatRow) throw new Error('No se pudo crear el chat.');
+
+    const { error: membersError } = await this.supabase.client.from('chat_members').insert([
+      { chat_id: chatRow.id, user_id: userA, role: 'member' },
+      { chat_id: chatRow.id, user_id: userB, role: 'member' },
+    ]);
+    this.throwIfError(membersError);
+
+    await this.loadChatsAndMessages();
+    return this.mapChat(chatRow, [userA, userB]);
   }
 
   chatMessages(chatId: string): Message[] {
@@ -275,117 +488,403 @@ export class DataService {
     return msgs[msgs.length - 1];
   }
 
-  sendMessage(chatId: string, senderId: string, texto: string) {
-    const msg: Message = { id: uid(), chatId, senderId, texto, fecha: new Date().toISOString() };
-    this.messages.update((arr) => [...arr, msg]);
-    this.persist();
+  chatHasUnread(chatId: string, userId: string): boolean {
+    const chat = this.getChat(chatId);
+    const lastReadAt = chat?.memberLastReadAt?.[userId] ?? null;
+    const lastReadTime = lastReadAt ? +new Date(lastReadAt) : 0;
+    return this.chatMessages(chatId).some((m) => m.senderId !== userId && +new Date(m.fecha) > lastReadTime);
   }
 
-  // ---------- Datos semilla ----------
-  private seed() {
-    const mk = (email: string, alias: string, nombre: string, desc = ''): User => ({
-      id: uid(),
+  unreadChatCount(userId: string): number {
+    return this.chatsForUser(userId).filter((chat) => this.chatHasUnread(chat.id, userId)).length;
+  }
+
+  async markChatRead(chatId: string, userId: string): Promise<void> {
+    const readAt = new Date().toISOString();
+    const { error } = await this.supabase.client
+      .from('chat_members')
+      .update({ last_read_at: readAt })
+      .eq('chat_id', chatId)
+      .eq('user_id', userId);
+    this.throwIfError(error);
+
+    this.chats.update((arr) =>
+      arr.map((chat) =>
+        chat.id === chatId
+          ? {
+              ...chat,
+              memberLastReadAt: {
+                ...chat.memberLastReadAt,
+                [userId]: readAt,
+              },
+            }
+          : chat
+      )
+    );
+  }
+
+  async sendMessage(chatId: string, senderId: string, texto: string): Promise<void> {
+    const { data: row, error } = await this.supabase.client
+      .from('messages')
+      .insert({ chat_id: chatId, sender_id: senderId, texto })
+      .select('id,chat_id,sender_id,texto,fecha')
+      .single<MessageRow>();
+    this.throwIfError(error);
+
+    if (row) {
+      this.messages.update((arr) => [...arr, this.mapMessage(row)]);
+    }
+  }
+
+  resetDemo(): void {
+    this.clear();
+  }
+
+  private async initialize(): Promise<void> {
+    try {
+      await this.refreshAll();
+    } catch (error) {
+      console.error('No se pudieron cargar los datos desde Supabase.', error);
+      this.clear();
+    }
+
+    this.supabase.client.auth.onAuthStateChange((_event, session) => {
+      if (!session?.user) {
+        this.clear();
+        return;
+      }
+
+      setTimeout(() => {
+        void this.refreshAll();
+      }, 0);
+    });
+  }
+
+  private async ensureCurrentProfile(): Promise<void> {
+    const { data } = await this.supabase.client.auth.getSession();
+    const authUser = data.session?.user;
+    if (!authUser) return;
+
+    const row = await this.buildProfileUpsertRow(authUser.id, {
+      email: authUser.email ?? '',
+      nombre: this.metadataText(authUser.user_metadata, 'nombre') || this.metadataText(authUser.user_metadata, 'name') || undefined,
+      alias: this.metadataText(authUser.user_metadata, 'alias') || undefined,
+    });
+
+    const { error } = await this.supabase.client.from('profiles').upsert(row, { onConflict: 'id' });
+    this.throwIfError(error);
+  }
+
+  private async buildProfileUpsertRow(userId: string, patch: Partial<User>): Promise<ProfileRow & { id: string }> {
+    const existing = this.getUser(userId);
+    const { data } = await this.supabase.client.auth.getSession();
+    const authUser = data.session?.user?.id === userId ? data.session.user : null;
+    const email = patch.email ?? existing?.email ?? authUser?.email ?? '';
+    const fallbackAlias = email.split('@')[0] || 'Usuario';
+    const metadataNombre = this.metadataText(authUser?.user_metadata, 'nombre');
+    const metadataName = this.metadataText(authUser?.user_metadata, 'name');
+    const metadataAlias = this.metadataText(authUser?.user_metadata, 'alias');
+
+    return {
+      id: userId,
       email,
-      password: '1234',
-      nombre,
-      alias,
-      descripcion: desc,
-      avatarColor: colorFor(alias),
-      friendIds: [],
-    });
-
-    const yo = mk('demo@vvg.app', 'Tú', 'Usuario Demo', 'Cuenta de demostración de VVG.');
-    const ana = mk('ana@vvg.app', 'Ana', 'Ana Pérez', 'Me encanta viajar.');
-    const luis = mk('luis@vvg.app', 'Luis', 'Luis Gómez');
-    const sofi = mk('sofi@vvg.app', 'Sofi', 'Sofía Ríos', 'Foodie de bares.');
-    const dani = mk('dani@vvg.app', 'Dani', 'Daniel Soto');
-
-    // Amistades de la cuenta demo.
-    yo.friendIds = [ana.id, luis.id, sofi.id];
-    ana.friendIds = [yo.id, luis.id];
-    luis.friendIds = [yo.id, ana.id, sofi.id];
-    sofi.friendIds = [yo.id, luis.id];
-    dani.friendIds = [];
-
-    const users = [yo, ana, luis, sofi, dani];
-    this.users.set(users);
-
-    const now = new Date();
-    const iso = (d: Date) => d.toISOString();
-    const daysAgo = (n: number) => iso(new Date(now.getTime() - n * 86400000));
-
-    // Viaje actual (en curso).
-    const viaje: Trip = {
-      id: uid(),
-      nombre: 'Fin de semana en la playa',
-      descripcion: 'Escapada de 3 días con amigos.',
-      tipo: 'viaje',
-      fechaInicio: daysAgo(2),
-      ownerId: yo.id,
-      memberIds: [yo.id, ana.id, luis.id],
-      finalizado: false,
-      createdAt: daysAgo(2),
+      nombre: (patch.nombre ?? existing?.nombre ?? metadataNombre) || metadataName || fallbackAlias,
+      alias: (patch.alias ?? existing?.alias ?? metadataAlias) || fallbackAlias,
+      descripcion: patch.descripcion ?? existing?.descripcion ?? '',
+      avatar_color: patch.avatarColor ?? existing?.avatarColor ?? '#5b5fc7',
     };
-    // Salida pasada finalizada.
-    const salida: Trip = {
-      id: uid(),
-      nombre: 'Bar con el equipo',
-      descripcion: 'Cervezas del viernes.',
-      tipo: 'salida',
-      fechaInicio: daysAgo(10),
-      fechaFin: daysAgo(10),
-      ownerId: sofi.id,
-      memberIds: [yo.id, sofi.id, luis.id],
-      finalizado: true,
-      createdAt: daysAgo(10),
-    };
-    this.trips.set([viaje, salida]);
-
-    const exp = (tripId: string, titulo: string, monto: number, pagadoPor: string, participantes: string[], fecha: string): Expense => ({
-      id: uid(),
-      tripId,
-      titulo,
-      monto,
-      pagadoPor,
-      participantes,
-      fecha,
-      createdAt: fecha,
-    });
-
-    this.expenses.set([
-      exp(viaje.id, 'Alojamiento (Airbnb)', 150000, yo.id, [yo.id, ana.id, luis.id], daysAgo(2)),
-      exp(viaje.id, 'Supermercado', 45000, ana.id, [yo.id, ana.id, luis.id], daysAgo(2)),
-      exp(viaje.id, 'Gasolina', 30000, luis.id, [yo.id, luis.id], daysAgo(1)),
-      exp(viaje.id, 'Cena restaurante', 60000, yo.id, [yo.id, ana.id, luis.id], daysAgo(1)),
-      exp(salida.id, 'Ronda de cervezas', 24000, sofi.id, [yo.id, sofi.id, luis.id], daysAgo(10)),
-      exp(salida.id, 'Picada', 18000, luis.id, [yo.id, sofi.id, luis.id], daysAgo(10)),
-    ]);
-
-    // Chats de grupo para cada viaje + un DM con Ana.
-    const chatViaje: Chat = { id: uid(), tipo: 'grupo', nombre: viaje.nombre, memberIds: viaje.memberIds, tripId: viaje.id };
-    const chatSalida: Chat = { id: uid(), tipo: 'grupo', nombre: salida.nombre, memberIds: salida.memberIds, tripId: salida.id };
-    const dmAna: Chat = { id: uid(), tipo: 'dm', memberIds: [yo.id, ana.id] };
-    this.chats.set([chatViaje, chatSalida, dmAna]);
-
-    this.messages.set([
-      { id: uid(), chatId: chatViaje.id, senderId: ana.id, texto: '¡Llegué al Airbnb! 🏖️', fecha: daysAgo(2) },
-      { id: uid(), chatId: chatViaje.id, senderId: yo.id, texto: 'Voy en camino', fecha: daysAgo(2) },
-      { id: uid(), chatId: dmAna.id, senderId: ana.id, texto: 'Oye, ¿pagaste la cena?', fecha: daysAgo(1) },
-      { id: uid(), chatId: dmAna.id, senderId: yo.id, texto: 'Sí, ya la registré en la app 😉', fecha: daysAgo(1) },
-    ]);
-
-    this.persist();
   }
 
-  // Reinicia todo a los datos semilla (útil en demo).
-  resetDemo() {
-    ['users', 'trips', 'expenses', 'photos', 'chats', 'messages'].forEach((k) => this.storage.remove(k));
+  private metadataText(metadata: Record<string, unknown> | undefined, key: string): string {
+    const value = metadata?.[key];
+    return typeof value === 'string' ? value.trim() : '';
+  }
+
+  private async loadUsers(): Promise<void> {
+    const { data: profileRows, error: profilesError } = await this.supabase.client
+      .from('profiles')
+      .select('id,email,nombre,alias,descripcion,avatar_color')
+      .returns<ProfileRow[]>();
+    this.throwIfError(profilesError);
+
+    const { data: friendshipRows, error: friendshipsError } = await this.supabase.client
+      .from('friendships')
+      .select('user_id,friend_id,status')
+      .eq('status', 'accepted')
+      .returns<FriendshipRow[]>();
+    this.throwIfError(friendshipsError);
+
+    const friendMap = new Map<string, string[]>();
+    for (const friendship of friendshipRows ?? []) {
+      this.pushMap(friendMap, friendship.user_id, friendship.friend_id);
+      this.pushMap(friendMap, friendship.friend_id, friendship.user_id);
+    }
+
+    this.users.set(
+      (profileRows ?? []).map((row) => ({
+        id: row.id,
+        email: row.email,
+        password: '',
+        nombre: row.nombre,
+        alias: row.alias,
+        descripcion: row.descripcion ?? '',
+        avatarColor: row.avatar_color,
+        friendIds: friendMap.get(row.id) ?? [],
+      }))
+    );
+  }
+
+  private async loadTrips(): Promise<void> {
+    const { data: tripRows, error: tripsError } = await this.supabase.client
+      .from('trips')
+      .select('id,owner_id,nombre,descripcion,tipo,fecha_inicio,fecha_fin,finalizado,created_at')
+      .order('created_at', { ascending: false })
+      .returns<TripRow[]>();
+    this.throwIfError(tripsError);
+
+    const { data: memberRows, error: membersError } = await this.supabase.client
+      .from('trip_members')
+      .select('trip_id,user_id')
+      .is('left_at', null)
+      .returns<TripMemberRow[]>();
+    this.throwIfError(membersError);
+
+    const membersByTrip = this.groupIds(memberRows ?? [], 'trip_id', 'user_id');
+    this.trips.set((tripRows ?? []).map((row) => this.mapTrip(row, membersByTrip.get(row.id) ?? [])));
+  }
+
+  private async loadExpenses(): Promise<void> {
+    const { data: expenseRows, error: expensesError } = await this.supabase.client
+      .from('expenses')
+      .select('id,trip_id,titulo,monto,pagado_por,metodo_reparto,fecha,created_at')
+      .is('deleted_at', null)
+      .order('fecha', { ascending: false })
+      .returns<ExpenseRow[]>();
+    this.throwIfError(expensesError);
+
+    const { data: participantRows, error: participantsError } = await this.supabase.client
+      .from('expense_participants')
+      .select('expense_id,user_id,weight,share_amount,share_percentage')
+      .returns<ExpenseParticipantRow[]>();
+    this.throwIfError(participantsError);
+
+    const participantsByExpense = this.groupShares(participantRows ?? []);
+    this.expenses.set(
+      (expenseRows ?? []).map((row) => this.mapExpense(row, participantsByExpense.get(row.id) ?? []))
+    );
+  }
+
+  private async loadPhotos(): Promise<void> {
+    const { data: rows, error } = await this.supabase.client
+      .from('trip_photos')
+      .select('id,trip_id,storage_path,uploaded_by,fecha')
+      .is('deleted_at', null)
+      .order('fecha', { ascending: false })
+      .returns<PhotoRow[]>();
+    this.throwIfError(error);
+
+    const photos = await Promise.all(
+      (rows ?? []).map(async (row) => {
+        const { data } = await this.supabase.client.storage.from('trip-photos').createSignedUrl(row.storage_path, 60 * 60);
+        return this.mapPhoto(row, data?.signedUrl ?? '');
+      })
+    );
+
+    this.photos.set(photos);
+  }
+
+  private async loadChatsAndMessages(): Promise<void> {
+    const { data: chatRows, error: chatsError } = await this.supabase.client
+      .from('chats')
+      .select('id,tipo,nombre,trip_id')
+      .order('created_at', { ascending: false })
+      .returns<ChatRow[]>();
+    this.throwIfError(chatsError);
+
+    const { data: memberRows, error: membersError } = await this.supabase.client
+      .from('chat_members')
+      .select('chat_id,user_id,last_read_at')
+      .returns<ChatMemberRow[]>();
+    this.throwIfError(membersError);
+
+    const { data: messageRows, error: messagesError } = await this.supabase.client
+      .from('messages')
+      .select('id,chat_id,sender_id,texto,fecha')
+      .is('deleted_at', null)
+      .order('fecha', { ascending: true })
+      .returns<MessageRow[]>();
+    this.throwIfError(messagesError);
+
+    const membersByChat = this.groupIds(memberRows ?? [], 'chat_id', 'user_id');
+    const readsByChat = this.groupChatReads(memberRows ?? []);
+    this.chats.set((chatRows ?? []).map((row) => this.mapChat(row, membersByChat.get(row.id) ?? [], readsByChat.get(row.id) ?? {})));
+    this.messages.set((messageRows ?? []).map((row) => this.mapMessage(row)));
+  }
+
+  private mapTrip(row: TripRow, memberIds: string[]): Trip {
+    return {
+      id: row.id,
+      nombre: row.nombre,
+      descripcion: row.descripcion,
+      tipo: row.tipo,
+      fechaInicio: this.toIso(row.fecha_inicio),
+      fechaFin: row.fecha_fin ? this.toIso(row.fecha_fin) : undefined,
+      ownerId: row.owner_id,
+      memberIds,
+      finalizado: row.finalizado,
+      createdAt: row.created_at,
+    };
+  }
+
+  private mapExpense(row: ExpenseRow, participantShares: ExpenseParticipantShare[]): Expense {
+    const shares = this.normalizeExpenseShares(
+      participantShares.map((share) => share.userId),
+      row.metodo_reparto ?? 'equal',
+      participantShares
+    );
+
+    return {
+      id: row.id,
+      tripId: row.trip_id,
+      titulo: row.titulo,
+      monto: Number(row.monto),
+      pagadoPor: row.pagado_por,
+      participantes: shares.map((share) => share.userId),
+      metodoReparto: row.metodo_reparto ?? 'equal',
+      participantShares: shares,
+      fecha: this.toIso(row.fecha),
+      createdAt: row.created_at,
+    };
+  }
+
+  private mapPhoto(row: PhotoRow, dataUrl: string): Photo {
+    return {
+      id: row.id,
+      tripId: row.trip_id,
+      dataUrl,
+      uploadedBy: row.uploaded_by,
+      fecha: row.fecha,
+    };
+  }
+
+  private mapChat(row: ChatRow, memberIds: string[], memberLastReadAt: Record<string, string | null> = {}): Chat {
+    return {
+      id: row.id,
+      tipo: row.tipo,
+      nombre: row.nombre ?? undefined,
+      memberIds,
+      memberLastReadAt,
+      tripId: row.trip_id ?? undefined,
+    };
+  }
+
+  private mapMessage(row: MessageRow): Message {
+    return {
+      id: row.id,
+      chatId: row.chat_id,
+      senderId: row.sender_id,
+      texto: row.texto,
+      fecha: row.fecha,
+    };
+  }
+
+  private clear(): void {
     this.users.set([]);
     this.trips.set([]);
     this.expenses.set([]);
     this.photos.set([]);
     this.chats.set([]);
     this.messages.set([]);
-    this.seed();
+  }
+
+  private pushMap(map: Map<string, string[]>, key: string, value: string): void {
+    const values = map.get(key) ?? [];
+    if (!values.includes(value)) values.push(value);
+    map.set(key, values);
+  }
+
+  private groupIds<T extends Record<K, string> & Record<V, string>, K extends keyof T, V extends keyof T>(
+    rows: T[],
+    groupKey: K,
+    valueKey: V
+  ): Map<string, string[]> {
+    const map = new Map<string, string[]>();
+    for (const row of rows) {
+      this.pushMap(map, row[groupKey], row[valueKey]);
+    }
+    return map;
+  }
+
+  private groupShares(rows: ExpenseParticipantRow[]): Map<string, ExpenseParticipantShare[]> {
+    const map = new Map<string, ExpenseParticipantShare[]>();
+    for (const row of rows) {
+      const values = map.get(row.expense_id) ?? [];
+      values.push({
+        userId: row.user_id,
+        weight: Number(row.weight ?? 1),
+        shareAmount: row.share_amount == null ? undefined : Number(row.share_amount),
+        sharePercentage: row.share_percentage == null ? undefined : Number(row.share_percentage),
+      });
+      map.set(row.expense_id, values);
+    }
+    return map;
+  }
+
+  private groupChatReads(rows: ChatMemberRow[]): Map<string, Record<string, string | null>> {
+    const map = new Map<string, Record<string, string | null>>();
+    for (const row of rows) {
+      const values = map.get(row.chat_id) ?? {};
+      values[row.user_id] = row.last_read_at;
+      map.set(row.chat_id, values);
+    }
+    return map;
+  }
+
+  private normalizeExpenseShares(
+    participantes: string[],
+    metodoReparto: ExpenseSplitMethod,
+    shares: ExpenseParticipantShare[] = []
+  ): ExpenseParticipantShare[] {
+    const map = new Map(shares.map((share) => [share.userId, share]));
+    return participantes.map((userId) => {
+      const existing = map.get(userId);
+      return {
+        userId,
+        weight: metodoReparto === 'weighted' ? Number(existing?.weight ?? 1) : Number(existing?.weight ?? 1),
+        shareAmount: metodoReparto === 'exact' ? Number(existing?.shareAmount ?? 0) : undefined,
+        sharePercentage: metodoReparto === 'percentage' ? Number(existing?.sharePercentage ?? 0) : undefined,
+      };
+    });
+  }
+
+  private toDateOnly(value: string): string {
+    return new Date(value).toISOString().slice(0, 10);
+  }
+
+  private toIso(value: string): string {
+    return value.includes('T') ? value : `${value}T00:00:00.000Z`;
+  }
+
+  private uuid(): string {
+    if ('randomUUID' in crypto) return crypto.randomUUID();
+    return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  }
+
+  private dataUrlToBlob(dataUrl: string): { blob: Blob; extension: string; contentType: string } {
+    const [header, base64] = dataUrl.split(',');
+    const contentType = header.match(/data:(.*?);base64/)?.[1] ?? 'image/jpeg';
+    const extension = contentType.split('/')[1] || 'jpg';
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+
+    return { blob: new Blob([bytes], { type: contentType }), extension, contentType };
+  }
+
+  private throwIfError(error: { message: string } | null): void {
+    if (error) throw new Error(error.message);
   }
 }

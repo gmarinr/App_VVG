@@ -60,19 +60,24 @@ export class CreateTripPage {
     if (!this.nombre.trim()) return this.show('Ponle un nombre al ' + this.tipo + '.', 'warning');
     if (!this.auth.userId) return;
 
-    const trip = this.data.createTrip({
-      nombre: this.nombre.trim(),
-      descripcion: this.descripcion.trim(),
-      tipo: this.tipo,
-      fechaInicio: new Date(this.fechaInicio).toISOString(),
-      fechaFin: this.fechaFin ? new Date(this.fechaFin).toISOString() : undefined,
-      ownerId: this.auth.userId,
-      memberIds: [...this.seleccionados],
-    });
+    try {
+      const trip = await this.data.createTrip({
+        nombre: this.nombre.trim(),
+        descripcion: this.descripcion.trim(),
+        tipo: this.tipo,
+        fechaInicio: new Date(this.fechaInicio).toISOString(),
+        fechaFin: this.fechaFin ? new Date(this.fechaFin).toISOString() : undefined,
+        ownerId: this.auth.userId,
+        memberIds: [...this.seleccionados],
+      });
 
-    this.reset();
-    await this.show('¡Creado! 🎉', 'success');
-    this.router.navigate(['/viaje', trip.id]);
+      this.reset();
+      await this.show('Creado correctamente.', 'success');
+      this.router.navigate(['/viaje', trip.id]);
+    } catch (error) {
+      console.error(error);
+      await this.show('No se pudo crear. Revisa la conexion o permisos.', 'danger');
+    }
   }
 
   private reset() {

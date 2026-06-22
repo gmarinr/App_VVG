@@ -9,7 +9,6 @@
 </ion-header>
 
 <ion-content [fullscreen]="true" class="ion-padding" *ngIf="expense as e">
-  <!-- Encabezado del gasto -->
   <div class="hero vvg-card">
     <span class="vvg-muted">{{ fechaLarga(e.fecha) }}</span>
     <h1>{{ e.titulo }}</h1>
@@ -20,12 +19,10 @@
     </div>
   </div>
 
-  <!-- Cómo se divide -->
-  <h3 class="vvg-section-title">¿Cómo se divide?</h3>
+  <h3 class="vvg-section-title">Como se divide</h3>
   <div class="split-banner vvg-card">
     <ion-icon name="swap-horizontal"></ion-icon>
-    <span>Dividido en partes iguales entre <b>{{ e.participantes.length }}</b> personas</span>
-    <strong>{{ porPersona | money }} c/u</strong>
+    <span>{{ splitLabel }} entre <b>{{ e.participantes.length }}</b> personas</span>
   </div>
 
   <h3 class="vvg-section-title">Participantes</h3>
@@ -33,8 +30,9 @@
     <app-avatar [user]="r.user" [size]="40"></app-avatar>
     <div class="part-body">
       <strong>{{ r.user.alias }}</strong>
-      <span class="vvg-muted small" *ngIf="r.pago">Pagó el total ({{ e.monto | money }})</span>
-      <span class="vvg-muted small" *ngIf="!r.pago">Debe su parte</span>
+      <span class="vvg-muted small" *ngIf="r.meta">{{ r.meta }}</span>
+      <span class="vvg-muted small" *ngIf="r.pago">Pago el total ({{ e.monto | money }})</span>
+      <span class="vvg-muted small" *ngIf="!r.pago">Debe {{ r.debe | money }}</span>
     </div>
     <div class="part-amount">
       <span class="debe">{{ r.debe | money }}</span>

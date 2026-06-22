@@ -22,6 +22,9 @@
       <span class="amigo-tag" *ngIf="esAmigo">
         <ion-icon name="checkmark-circle"></ion-icon> Amigos
       </span>
+      <ion-button color="danger" *ngIf="esAmigo" (click)="eliminarAmigo()">
+        <ion-icon name="person-remove-outline" slot="start"></ion-icon> Eliminar
+      </ion-button>
     </div>
   </div>
 

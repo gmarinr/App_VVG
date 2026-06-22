@@ -45,18 +45,30 @@ export class ExpenseDetailPage {
     return this.expense ? this.data.getUser(this.expense.pagadoPor) : undefined;
   }
 
-  get porPersona(): number {
-    return this.expense ? this.balance.shareForExpense(this.expense) : 0;
+  get splitLabel(): string {
+    const e = this.expense;
+    if (!e) return '';
+    switch (e.metodoReparto) {
+      case 'exact': return 'Monto exacto por persona';
+      case 'percentage': return 'Porcentaje por persona';
+      case 'weighted': return 'Reparto ponderado';
+      case 'equal':
+      default: return 'Partes iguales';
+    }
   }
 
-  // Para cada participante: cuánto le corresponde y si es quien pagó.
-  get reparto(): { user: User; debe: number; pago: boolean }[] {
+  get reparto(): { user: User; debe: number; pago: boolean; meta: string }[] {
     const e = this.expense;
     if (!e) return [];
     return e.participantes
       .map((id) => this.data.getUser(id))
       .filter((u): u is User => !!u)
-      .map((u) => ({ user: u, debe: this.porPersona, pago: u.id === e.pagadoPor }));
+      .map((u) => ({
+        user: u,
+        debe: this.balance.userShareInExpense(e, u.id),
+        pago: u.id === e.pagadoPor,
+        meta: this.shareMeta(e, u.id),
+      }));
   }
 
   fechaLarga(iso: string): string {
@@ -66,14 +78,14 @@ export class ExpenseDetailPage {
   async eliminar() {
     const alert = await this.alertCtrl.create({
       header: 'Eliminar gasto',
-      message: '¿Seguro que quieres eliminar este gasto?',
+      message: 'Seguro que quieres eliminar este gasto?',
       buttons: [
         { text: 'Cancelar', role: 'cancel' },
         {
           text: 'Eliminar',
           role: 'destructive',
           handler: async () => {
-            this.data.deleteExpense(this.expenseId);
+            await this.data.deleteExpense(this.expenseId);
             const t = await this.toast.create({ message: 'Gasto eliminado.', duration: 1500, color: 'medium', position: 'top' });
             await t.present();
             this.router.navigate(['/viaje', this.tripId]);
@@ -82,5 +94,12 @@ export class ExpenseDetailPage {
       ],
     });
     await alert.present();
+  }
+
+  private shareMeta(e: Expense, userId: string): string {
+    const share = e.participantShares.find((x) => x.userId === userId);
+    if (e.metodoReparto === 'percentage') return `${share?.sharePercentage ?? 0}%`;
+    if (e.metodoReparto === 'weighted') return `Peso ${share?.weight ?? 1}`;
+    return '';
   }
 }

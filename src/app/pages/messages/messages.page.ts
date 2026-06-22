@@ -67,6 +67,10 @@ export class MessagesPage {
     return new Date(m.fecha).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' });
   }
 
+  hasUnread(c: Chat): boolean {
+    return this.me ? this.data.chatHasUnread(c.id, this.me.id) : false;
+  }
+
   onTab(ev: CustomEvent) {
     this.tab = (ev.detail as { value: 'amigos' | 'grupos' }).value;
   }

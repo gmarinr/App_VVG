@@ -2,6 +2,7 @@
 // Diseñados para mapear 1:1 con tablas de Supabase cuando se conecte.
 
 export type ActivityType = 'viaje' | 'salida';
+export type ExpenseSplitMethod = 'equal' | 'exact' | 'percentage' | 'weighted';
 
 export interface User {
   id: string;
@@ -34,8 +35,17 @@ export interface Expense {
   monto: number;
   pagadoPor: string; // userId
   participantes: string[]; // userIds que comparten el gasto
+  metodoReparto: ExpenseSplitMethod;
+  participantShares: ExpenseParticipantShare[];
   fecha: string; // ISO (fecha del gasto)
   createdAt: string;
+}
+
+export interface ExpenseParticipantShare {
+  userId: string;
+  weight: number;
+  shareAmount?: number;
+  sharePercentage?: number;
 }
 
 export interface Photo {
@@ -53,6 +63,7 @@ export interface Chat {
   tipo: ChatType;
   nombre?: string; // para grupos
   memberIds: string[];
+  memberLastReadAt: Record<string, string | null>;
   tripId?: string; // si es chat de un viaje/salida
 }
 

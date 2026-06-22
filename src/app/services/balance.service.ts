@@ -20,7 +20,25 @@ export class BalanceService {
 
   // ¿Cuánto le toca pagar a `userId` de este gasto en concreto?
   userShareInExpense(e: Expense, userId: string): number {
-    return e.participantes.includes(userId) ? this.shareForExpense(e) : 0;
+    if (!e.participantes.includes(userId)) return 0;
+
+    const share = e.participantShares?.find((x) => x.userId === userId);
+    switch (e.metodoReparto ?? 'equal') {
+      case 'exact':
+        return this.round(share?.shareAmount ?? 0);
+      case 'percentage':
+        return this.round(e.monto * ((share?.sharePercentage ?? 0) / 100));
+      case 'weighted': {
+        const totalWeight = (e.participantShares ?? [])
+          .filter((x) => e.participantes.includes(x.userId))
+          .reduce((sum, x) => sum + (x.weight || 0), 0);
+        if (totalWeight <= 0) return this.shareForExpense(e);
+        return this.round(e.monto * ((share?.weight ?? 1) / totalWeight));
+      }
+      case 'equal':
+      default:
+        return this.shareForExpense(e);
+    }
   }
 
   // Balance neto de cada miembro dentro de un viaje.

@@ -7,7 +7,7 @@
 
 <ion-content [fullscreen]="true" class="ion-padding">
   <ion-item lines="none" class="field">
-    <ion-input label="Título" labelPlacement="stacked" placeholder="Ej: Cena, gasolina..." [(ngModel)]="titulo"></ion-input>
+    <ion-input label="Titulo" labelPlacement="stacked" placeholder="Ej: Cena, gasolina..." [(ngModel)]="titulo"></ion-input>
   </ion-item>
 
   <div class="two-col">
@@ -20,12 +20,21 @@
   </div>
 
   <ion-item lines="none" class="field">
-    <ion-select label="¿Quién pagó?" labelPlacement="stacked" [(ngModel)]="pagadoPor" interface="action-sheet">
+    <ion-select label="Quien pago" labelPlacement="stacked" [(ngModel)]="pagadoPor" interface="action-sheet">
       <ion-select-option *ngFor="let m of miembros" [value]="m.id">{{ m.alias }}</ion-select-option>
     </ion-select>
   </ion-item>
 
-  <label class="lbl">¿Quiénes participan? <span class="vvg-muted">(se divide en partes iguales)</span></label>
+  <ion-item lines="none" class="field">
+    <ion-select label="Forma de dividir" labelPlacement="stacked" [(ngModel)]="metodoReparto" (ionChange)="onMetodo($event)" interface="action-sheet">
+      <ion-select-option value="equal">Partes iguales</ion-select-option>
+      <ion-select-option value="exact">Monto exacto por persona</ion-select-option>
+      <ion-select-option value="percentage">Porcentaje por persona</ion-select-option>
+      <ion-select-option value="weighted">Ponderado</ion-select-option>
+    </ion-select>
+  </ion-item>
+
+  <label class="lbl">Quienes participan <span class="vvg-muted">({{ metodoLabel() }})</span></label>
   <div class="participants">
     <div class="chip" *ngFor="let m of miembros" [class.sel]="participantes.has(m.id)" (click)="toggle(m.id)">
       <app-avatar [user]="m" [size]="30"></app-avatar>
@@ -34,9 +43,54 @@
     </div>
   </div>
 
-  <div class="split vvg-card" *ngIf="porPersona > 0">
-    <span class="vvg-muted">Cada participante paga</span>
-    <strong>{{ porPersona | money }}</strong>
+  <div class="split-editor vvg-card" *ngIf="participantesSeleccionados.length && metodoReparto !== 'equal'">
+    <div class="split-row" *ngFor="let m of participantesSeleccionados">
+      <div class="person">
+        <app-avatar [user]="m" [size]="34"></app-avatar>
+        <strong>{{ m.alias }}</strong>
+      </div>
+
+      <ion-input
+        *ngIf="metodoReparto === 'exact'"
+        type="number"
+        inputmode="decimal"
+        label="Monto"
+        labelPlacement="stacked"
+        [(ngModel)]="splitValues[m.id]">
+      </ion-input>
+
+      <ion-input
+        *ngIf="metodoReparto === 'percentage'"
+        type="number"
+        inputmode="decimal"
+        label="%"
+        labelPlacement="stacked"
+        [(ngModel)]="splitValues[m.id]">
+      </ion-input>
+
+      <ion-input
+        *ngIf="metodoReparto === 'weighted'"
+        type="number"
+        inputmode="decimal"
+        label="Peso"
+        labelPlacement="stacked"
+        [(ngModel)]="splitValues[m.id]">
+      </ion-input>
+    </div>
+  </div>
+
+  <div class="split vvg-card" *ngIf="repartoResumen.length">
+    <div class="split-head">
+      <span class="vvg-muted">Resumen del reparto</span>
+      <strong *ngIf="metodoReparto === 'exact'">{{ exactTotal | money }} / {{ (monto || 0) | money }}</strong>
+      <strong *ngIf="metodoReparto === 'percentage'">{{ percentageTotal }}% / 100%</strong>
+      <strong *ngIf="metodoReparto === 'weighted'">Peso total {{ weightTotal }}</strong>
+      <strong *ngIf="metodoReparto === 'equal'">{{ porPersona | money }} c/u</strong>
+    </div>
+    <div class="preview-row" *ngFor="let r of repartoResumen">
+      <span>{{ r.user.alias }}</span>
+      <strong>{{ r.amount | money }}</strong>
+    </div>
   </div>
 
   <ion-button expand="block" (click)="guardar()" class="save">Guardar gasto</ion-button>

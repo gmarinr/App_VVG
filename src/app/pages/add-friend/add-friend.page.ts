@@ -25,7 +25,15 @@ export class AddFriendPage {
 
   constructor(private auth: AuthService, private data: DataService, private toast: ToastController) {}
 
-  // Usuarios que aún no son mis amigos, filtrados por búsqueda.
+  async ionViewWillEnter() {
+    try {
+      await this.data.refreshAll();
+    } catch (error) {
+      console.error(error);
+      await this.show('No se pudieron cargar los perfiles.', 'danger');
+    }
+  }
+
   get resultados(): User[] {
     if (!this.auth.userId) return [];
     const term = this.q.trim().toLowerCase();
@@ -36,8 +44,17 @@ export class AddFriendPage {
 
   async agregar(u: User) {
     if (!this.auth.userId) return;
-    this.data.addFriend(this.auth.userId, u.id);
-    const t = await this.toast.create({ message: `${u.alias} ahora es tu amigo 🎉`, duration: 1600, color: 'success', position: 'top' });
+    try {
+      await this.data.addFriend(this.auth.userId, u.id);
+      await this.show(`${u.alias} ahora es tu amigo.`, 'success');
+    } catch (error) {
+      console.error(error);
+      await this.show('No se pudo agregar el amigo. Revisa profiles y RLS.', 'danger');
+    }
+  }
+
+  private async show(message: string, color: string) {
+    const t = await this.toast.create({ message, duration: 1800, color, position: 'top' });
     await t.present();
   }
 }

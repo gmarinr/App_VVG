@@ -139,8 +139,8 @@ export class TripDetailPage {
     return this.data.getFriends(this.me.id).filter((f) => !this.trip!.memberIds.includes(f.id));
   }
 
-  agregarMiembro(u: User) {
-    this.data.addMember(this.tripId, u.id);
+  async agregarMiembro(u: User) {
+    await this.data.addMember(this.tripId, u.id);
     this.notify(`${u.alias} agregado.`);
   }
 
@@ -148,7 +148,7 @@ export class TripDetailPage {
     if (!this.data.canRemoveMember(this.tripId, u.id)) {
       return this.notify('No se puede quitar: tiene gastos asociados.', 'warning');
     }
-    this.data.removeMember(this.tripId, u.id);
+    await this.data.removeMember(this.tripId, u.id);
     this.notify(`${u.alias} eliminado del ${this.trip?.tipo}.`);
   }
 
@@ -158,7 +158,7 @@ export class TripDetailPage {
       inputs: [{ name: 'v', value: this.trip?.nombre, placeholder: 'Nombre' }],
       buttons: [
         { text: 'Cancelar', role: 'cancel' },
-        { text: 'Guardar', handler: (d) => { if (d.v?.trim()) this.data.updateTrip(this.tripId, { nombre: d.v.trim() }); } },
+        { text: 'Guardar', handler: async (d) => { if (d.v?.trim()) await this.data.updateTrip(this.tripId, { nombre: d.v.trim() }); } },
       ],
     });
     await alert.present();
@@ -170,7 +170,7 @@ export class TripDetailPage {
       inputs: [{ name: 'v', type: 'textarea', value: this.trip?.descripcion, placeholder: 'Descripción' }],
       buttons: [
         { text: 'Cancelar', role: 'cancel' },
-        { text: 'Guardar', handler: (d) => { this.data.updateTrip(this.tripId, { descripcion: (d.v ?? '').trim() }); } },
+        { text: 'Guardar', handler: async (d) => { await this.data.updateTrip(this.tripId, { descripcion: (d.v ?? '').trim() }); } },
       ],
     });
     await alert.present();
@@ -182,7 +182,7 @@ export class TripDetailPage {
       message: 'Se marcará como terminado. Los balances quedan registrados.',
       buttons: [
         { text: 'Cancelar', role: 'cancel' },
-        { text: 'Finalizar', handler: () => { this.data.finalizeTrip(this.tripId); this.notify('Marcado como finalizado.'); } },
+        { text: 'Finalizar', handler: async () => { await this.data.finalizeTrip(this.tripId); this.notify('Marcado como finalizado.'); } },
       ],
     });
     await alert.present();

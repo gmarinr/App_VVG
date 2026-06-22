@@ -32,6 +32,19 @@
     text-overflow: ellipsis;
     margin-top: 2px;
   }
+
+  .unread-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--ion-color-danger);
+    flex-shrink: 0;
+  }
+
+  &.unread {
+    .chat-top strong { font-weight: 800; color: #202234; }
+    .preview { color: #202234 !important; font-weight: 600; }
+  }
 }
 
 .empty {

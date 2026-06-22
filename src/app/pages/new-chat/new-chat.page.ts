@@ -34,9 +34,9 @@ export class NewChatPage {
       .filter((f) => !term || f.alias.toLowerCase().includes(term) || f.nombre.toLowerCase().includes(term));
   }
 
-  iniciar(f: User) {
+  async iniciar(f: User) {
     if (!this.auth.userId) return;
-    const chat = this.data.getOrCreateDm(this.auth.userId, f.id);
+    const chat = await this.data.getOrCreateDm(this.auth.userId, f.id);
     this.router.navigate(['/chat', chat.id]);
   }
 }

@@ -43,11 +43,56 @@
 }
 
 .split {
+  margin-bottom: 18px;
+  .split-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  strong { font-size: 1.25rem; color: var(--ion-color-primary); }
+}
+
+.split-editor {
+  margin-bottom: 14px;
+  padding: 12px;
+}
+
+.split-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(35, 38, 59, 0.08);
+  &:last-child { border-bottom: 0; }
+  .person {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+  ion-input {
+    --background: #f4f5fa;
+    --padding-start: 10px;
+    --padding-end: 10px;
+    border-radius: 10px;
+  }
+}
+
+.preview-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 18px;
-  strong { font-size: 1.25rem; color: var(--ion-color-primary); }
+  gap: 12px;
+  padding: 6px 0;
+  span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  strong { font-size: 0.95rem; }
 }
 
 .save { margin-top: 4px; }

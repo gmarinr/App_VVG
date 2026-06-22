@@ -91,10 +91,11 @@ export class ChatPage {
     return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'long' });
   }
 
-  enviar() {
+  async enviar() {
     const t = this.texto.trim();
     if (!t || !this.me) return;
-    this.data.sendMessage(this.chatId, this.me.id, t);
+    await this.data.sendMessage(this.chatId, this.me.id, t);
+    await this.data.markChatRead(this.chatId, this.me.id);
     this.texto = '';
     setTimeout(() => this.content?.scrollToBottom(200), 50);
   }
@@ -109,5 +110,15 @@ export class ChatPage {
 
   ionViewDidEnter() {
     setTimeout(() => this.content?.scrollToBottom(0), 50);
+    void this.markRead();
+  }
+
+  private async markRead(): Promise<void> {
+    if (!this.me) return;
+    try {
+      await this.data.markChatRead(this.chatId, this.me.id);
+    } catch (error) {
+      console.error(error);
+    }
   }
 }

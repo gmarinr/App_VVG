@@ -33,6 +33,10 @@
     <div class="friend" *ngFor="let f of amigos" (click)="verPerfil(f)">
       <app-avatar [user]="f" [size]="64"></app-avatar>
       <span>{{ f.alias }}</span>
+      <ion-button fill="clear" color="danger" size="small" class="remove-friend" (click)="eliminarAmigo(f, $event)">
+        <ion-icon name="person-remove-outline" slot="start"></ion-icon>
+        Eliminar
+      </ion-button>
     </div>
     <div class="friend add" (click)="agregarAmigo()">
       <div class="add-circle"><ion-icon name="add"></ion-icon></div>

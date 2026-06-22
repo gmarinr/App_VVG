@@ -20,7 +20,7 @@
   </ion-segment>
 
   <div *ngIf="chats.length; else vacio">
-    <div class="chat-row" *ngFor="let c of chats" (click)="open(c)">
+    <div class="chat-row" *ngFor="let c of chats" [class.unread]="hasUnread(c)" (click)="open(c)">
       <app-avatar *ngIf="c.tipo === 'dm'" [user]="chatUser(c)" [size]="50"></app-avatar>
       <div *ngIf="c.tipo === 'grupo'" class="group-avatar"><ion-icon name="people"></ion-icon></div>
       <div class="chat-body">
@@ -30,6 +30,7 @@
         </div>
         <span class="vvg-muted preview">{{ preview(c) }}</span>
       </div>
+      <span class="unread-dot" *ngIf="hasUnread(c)"></span>
     </div>
   </div>
 
