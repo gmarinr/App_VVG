@@ -56,6 +56,20 @@ export interface Photo {
   fecha: string; // ISO
 }
 
+export type PaymentStatus = 'pending' | 'paid' | 'cancelled';
+
+export interface Payment {
+  id: string;
+  tripId: string;
+  fromUserId: string;
+  toUserId: string;
+  monto: number;
+  status: PaymentStatus;
+  createdBy: string;
+  paidAt?: string;
+  createdAt: string;
+}
+
 export type ChatType = 'dm' | 'grupo';
 
 export interface Chat {

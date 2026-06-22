@@ -1,8 +1,11 @@
-import { Component } from '@angular/core';
+import { Component, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import {
   IonContent, IonHeader, IonToolbar, IonTitle, IonIcon, IonRefresher, IonRefresherContent,
+  IonButton, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonInput,
+  IonItem, IonLabel, IonList, IonBadge, IonGrid, IonRow, IonCol, ToastController,
 } from '@ionic/angular/standalone';
 import { AuthService } from '../../services/auth.service';
 import { DataService } from '../../services/data.service';
@@ -10,24 +13,43 @@ import { BalanceService } from '../../services/balance.service';
 import { MoneyPipe } from '../../shared/money.pipe';
 import { BarChartComponent, BarDatum } from '../../shared/bar-chart.component';
 import { AmountCardComponent } from '../../shared/amount-card.component';
-import { Trip, User } from '../../models/models';
+import { Settlement, Trip, User } from '../../models/models';
+
+interface PendingPaymentItem {
+  id: string;
+  trip: Trip;
+  settlement: Settlement;
+  other: User;
+  direction: 'receive' | 'pay';
+  monto: number;
+}
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
   imports: [
-    CommonModule, IonContent, IonHeader, IonToolbar, IonTitle, IonIcon,
-    IonRefresher, IonRefresherContent, MoneyPipe, BarChartComponent,
+    CommonModule, FormsModule, IonContent, IonHeader, IonToolbar, IonTitle, IonIcon,
+    IonRefresher, IonRefresherContent, IonButton, IonCard, IonCardContent,
+    IonCardHeader, IonCardTitle, IonInput, IonItem, IonLabel, IonList, IonBadge,
+    IonGrid, IonRow, IonCol,
+    MoneyPipe, BarChartComponent,
     AmountCardComponent,
   ],
   templateUrl: './dashboard.page.html',
+  styleUrls: ['./dashboard.page.scss'],
 })
 export class DashboardPage {
+  showPaymentCard = false;
+  savingPaymentId: string | null = null;
+  private readonly paymentAmounts: Record<string, number | undefined> = {};
+  private readonly pendingPayments = computed(() => this.buildPendingPayments());
+
   constructor(
     private auth: AuthService,
     public data: DataService,
     private balance: BalanceService,
     private router: Router,
+    private toast: ToastController,
   ) {}
 
   get me(): User | null {
@@ -56,9 +78,40 @@ export class DashboardPage {
       .filter((p) => p.user);
   }
 
+  get pagosPendientes(): PendingPaymentItem[] {
+    return this.pendingPayments();
+  }
+
   get chartData(): BarDatum[] {
     if (!this.me) return [];
     return this.balance.spendingByDate(this.me.id).map((d) => ({ label: this.shortDate(d.fecha), value: d.total }));
+  }
+
+  private buildPendingPayments(): PendingPaymentItem[] {
+    if (!this.me) return [];
+    const items: PendingPaymentItem[] = [];
+
+    for (const trip of this.data.tripsForUser(this.me.id)) {
+      for (const settlement of this.balance.tripSettlements(trip.id)) {
+        if (settlement.fromUserId !== this.me.id && settlement.toUserId !== this.me.id) continue;
+
+        const direction = settlement.toUserId === this.me.id ? 'receive' : 'pay';
+        const otherId = direction === 'receive' ? settlement.fromUserId : settlement.toUserId;
+        const other = this.data.getUser(otherId);
+        if (!other) continue;
+
+        items.push({
+          id: `${trip.id}:${settlement.fromUserId}:${settlement.toUserId}`,
+          trip,
+          settlement,
+          other,
+          direction,
+          monto: settlement.monto,
+        });
+      }
+    }
+
+    return items.sort((a, b) => b.monto - a.monto);
   }
 
   // Gráfico mini del viaje actual.
@@ -88,7 +141,70 @@ export class DashboardPage {
     this.router.navigate(['/perfil', user.id]);
   }
 
+  togglePaymentCard() {
+    this.showPaymentCard = !this.showPaymentCard;
+  }
+
+  paymentTitle(item: PendingPaymentItem): string {
+    return item.direction === 'receive' ? `${item.other.alias} te paga` : `Le pagas a ${item.other.alias}`;
+  }
+
+  trackPendingPayment(_index: number, item: PendingPaymentItem): string {
+    return item.id;
+  }
+
+  paymentAmount(item: PendingPaymentItem): number | '' {
+    return this.paymentAmounts[item.id] ?? '';
+  }
+
+  setPaymentAmount(itemId: string, value: number | string | null | undefined) {
+    const amount = Number(value);
+    this.paymentAmounts[itemId] = Number.isFinite(amount) && amount > 0 ? amount : undefined;
+  }
+
+  setFullPayment(item: PendingPaymentItem) {
+    this.paymentAmounts[item.id] = item.monto;
+  }
+
+  async confirmPayment(item: PendingPaymentItem) {
+    const amount = this.roundMoney(this.paymentAmounts[item.id] ?? 0);
+    if (amount <= 0) {
+      await this.show('Ingresa un monto pagado mayor que cero.', 'warning');
+      return;
+    }
+    if (amount - item.monto > 0.01) {
+      await this.show('El monto pagado no puede superar el pendiente.', 'warning');
+      return;
+    }
+
+    this.savingPaymentId = item.id;
+    try {
+      await this.data.addPayment({
+        tripId: item.trip.id,
+        fromUserId: item.settlement.fromUserId,
+        toUserId: item.settlement.toUserId,
+        monto: amount,
+      });
+      delete this.paymentAmounts[item.id];
+      await this.show('Pago confirmado.', 'success');
+    } catch (error) {
+      console.error(error);
+      await this.show('No se pudo confirmar el pago.', 'danger');
+    } finally {
+      this.savingPaymentId = null;
+    }
+  }
+
   refresh(ev: CustomEvent) {
     (ev.target as HTMLIonRefresherElement).complete();
+  }
+
+  private roundMoney(value: number): number {
+    return Math.round(value * 100) / 100;
+  }
+
+  private async show(message: string, color: string) {
+    const t = await this.toast.create({ message, duration: 1800, color, position: 'top' });
+    await t.present();
   }
 }

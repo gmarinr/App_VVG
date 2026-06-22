@@ -1,5 +1,17 @@
 import { Injectable, signal } from '@angular/core';
-import { ActivityType, Chat, Expense, ExpenseParticipantShare, ExpenseSplitMethod, Message, Photo, Trip, User } from '../models/models';
+import {
+  ActivityType,
+  Chat,
+  Expense,
+  ExpenseParticipantShare,
+  ExpenseSplitMethod,
+  Message,
+  Payment,
+  PaymentStatus,
+  Photo,
+  Trip,
+  User,
+} from '../models/models';
 import { SupabaseService } from './supabase.service';
 
 type FriendshipStatus = 'pending' | 'accepted' | 'blocked';
@@ -64,6 +76,18 @@ interface PhotoRow {
   fecha: string;
 }
 
+interface PaymentRow {
+  id: string;
+  trip_id: string;
+  from_user_id: string;
+  to_user_id: string;
+  monto: number | string;
+  status: PaymentStatus;
+  created_by: string;
+  paid_at: string | null;
+  created_at: string;
+}
+
 interface ChatRow {
   id: string;
   tipo: ChatType;
@@ -91,6 +115,7 @@ export class DataService {
   readonly trips = signal<Trip[]>([]);
   readonly expenses = signal<Expense[]>([]);
   readonly photos = signal<Photo[]>([]);
+  readonly payments = signal<Payment[]>([]);
   readonly chats = signal<Chat[]>([]);
   readonly messages = signal<Message[]>([]);
 
@@ -111,6 +136,7 @@ export class DataService {
       this.loadTrips(),
       this.loadExpenses(),
       this.loadPhotos(),
+      this.loadPayments(),
       this.loadChatsAndMessages(),
     ]);
   }
@@ -275,8 +301,16 @@ export class DataService {
     if (patch.finalizado !== undefined) update.finalizado = patch.finalizado;
 
     if (Object.keys(update).length) {
-      const { error } = await this.supabase.client.from('trips').update(update).eq('id', tripId);
+      const { data, error } = await this.supabase.client
+        .from('trips')
+        .update(update)
+        .eq('id', tripId)
+        .select('id,owner_id,nombre,descripcion,tipo,fecha_inicio,fecha_fin,finalizado,created_at')
+        .maybeSingle<TripRow>();
       this.throwIfError(error);
+      if (!data) {
+        throw new Error('No se pudo actualizar el viaje. Solo el organizador puede modificarlo.');
+      }
     }
 
     if (patch.nombre) {
@@ -343,9 +377,10 @@ export class DataService {
   }
 
   async finalizeTrip(tripId: string): Promise<void> {
+    const trip = this.getTrip(tripId);
     await this.updateTrip(tripId, {
       finalizado: true,
-      fechaFin: this.getTrip(tripId)?.fechaFin ?? new Date().toISOString(),
+      fechaFin: trip?.fechaFin ?? this.validFinishDate(trip),
     });
   }
 
@@ -419,6 +454,46 @@ export class DataService {
     return this.photos()
       .filter((p) => p.tripId === tripId)
       .sort((a, b) => +new Date(b.fecha) - +new Date(a.fecha));
+  }
+
+  tripPayments(tripId: string): Payment[] {
+    return this.payments()
+      .filter((p) => p.tripId === tripId && p.status === 'paid')
+      .sort((a, b) => +new Date(b.paidAt ?? b.createdAt) - +new Date(a.paidAt ?? a.createdAt));
+  }
+
+  async addPayment(data: {
+    tripId: string;
+    fromUserId: string;
+    toUserId: string;
+    monto: number;
+  }): Promise<Payment> {
+    const { data: sessionData } = await this.supabase.client.auth.getSession();
+    const createdBy = sessionData.session?.user.id;
+    if (!createdBy) throw new Error('No hay sesion activa.');
+    if (data.fromUserId === data.toUserId) throw new Error('El pago necesita dos usuarios distintos.');
+    if (!Number.isFinite(data.monto) || data.monto <= 0) throw new Error('El monto pagado debe ser mayor que cero.');
+
+    const now = new Date().toISOString();
+    const { data: row, error } = await this.supabase.client
+      .from('payments')
+      .insert({
+        trip_id: data.tripId,
+        from_user_id: data.fromUserId,
+        to_user_id: data.toUserId,
+        monto: data.monto,
+        status: 'paid',
+        created_by: createdBy,
+        paid_at: now,
+      })
+      .select('id,trip_id,from_user_id,to_user_id,monto,status,created_by,paid_at,created_at')
+      .single<PaymentRow>();
+    this.throwIfError(error);
+
+    if (!row) throw new Error('No se pudo registrar el pago.');
+
+    await this.loadPayments();
+    return this.mapPayment(row);
   }
 
   async addPhoto(tripId: string, dataUrl: string, uploadedBy: string): Promise<void> {
@@ -693,6 +768,18 @@ export class DataService {
     this.photos.set(photos);
   }
 
+  private async loadPayments(): Promise<void> {
+    const { data: rows, error } = await this.supabase.client
+      .from('payments')
+      .select('id,trip_id,from_user_id,to_user_id,monto,status,created_by,paid_at,created_at')
+      .neq('status', 'cancelled')
+      .order('created_at', { ascending: false })
+      .returns<PaymentRow[]>();
+    this.throwIfError(error);
+
+    this.payments.set((rows ?? []).map((row) => this.mapPayment(row)));
+  }
+
   private async loadChatsAndMessages(): Promise<void> {
     const { data: chatRows, error: chatsError } = await this.supabase.client
       .from('chats')
@@ -767,6 +854,20 @@ export class DataService {
     };
   }
 
+  private mapPayment(row: PaymentRow): Payment {
+    return {
+      id: row.id,
+      tripId: row.trip_id,
+      fromUserId: row.from_user_id,
+      toUserId: row.to_user_id,
+      monto: Number(row.monto),
+      status: row.status,
+      createdBy: row.created_by,
+      paidAt: row.paid_at ?? undefined,
+      createdAt: row.created_at,
+    };
+  }
+
   private mapChat(row: ChatRow, memberIds: string[], memberLastReadAt: Record<string, string | null> = {}): Chat {
     return {
       id: row.id,
@@ -793,6 +894,7 @@ export class DataService {
     this.trips.set([]);
     this.expenses.set([]);
     this.photos.set([]);
+    this.payments.set([]);
     this.chats.set([]);
     this.messages.set([]);
   }
@@ -863,6 +965,12 @@ export class DataService {
 
   private toIso(value: string): string {
     return value.includes('T') ? value : `${value}T00:00:00.000Z`;
+  }
+
+  private validFinishDate(trip: Trip | undefined): string {
+    const today = this.toDateOnly(new Date().toISOString());
+    const start = trip?.fechaInicio ? this.toDateOnly(trip.fechaInicio) : today;
+    return today >= start ? today : start;
   }
 
   private uuid(): string {

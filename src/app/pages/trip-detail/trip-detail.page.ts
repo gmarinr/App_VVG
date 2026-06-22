@@ -51,6 +51,10 @@ export class TripDetailPage {
     return this.data.getTrip(this.tripId);
   }
 
+  get isOwner(): boolean {
+    return !!this.me && !!this.trip && this.trip.ownerId === this.me.id;
+  }
+
   onSeg(ev: CustomEvent) {
     this.seg = (ev.detail as { value: Seg }).value;
   }
@@ -177,12 +181,28 @@ export class TripDetailPage {
   }
 
   async finalizar() {
+    if (!this.isOwner) {
+      await this.notify(`Solo el organizador puede finalizar este ${this.trip?.tipo ?? 'viaje'}.`, 'warning');
+      return;
+    }
+
     const alert = await this.alertCtrl.create({
       header: `Finalizar ${this.trip?.tipo}`,
       message: 'Se marcará como terminado. Los balances quedan registrados.',
       buttons: [
         { text: 'Cancelar', role: 'cancel' },
-        { text: 'Finalizar', handler: async () => { await this.data.finalizeTrip(this.tripId); this.notify('Marcado como finalizado.'); } },
+        {
+          text: 'Finalizar',
+          handler: async () => {
+            try {
+              await this.data.finalizeTrip(this.tripId);
+              await this.notify('Marcado como finalizado.');
+            } catch (error) {
+              console.error(error);
+              await this.notify('No se pudo finalizar. Revisa permisos o conexion.', 'danger');
+            }
+          },
+        },
       ],
     });
     await alert.present();

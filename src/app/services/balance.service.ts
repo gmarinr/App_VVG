@@ -46,6 +46,12 @@ export class BalanceService {
     const trip = this.data.getTrip(tripId);
     if (!trip) return [];
     const expenses = this.data.tripExpenses(tripId);
+    const paymentAdjustments = new Map<string, number>();
+
+    for (const payment of this.data.tripPayments(tripId)) {
+      paymentAdjustments.set(payment.fromUserId, (paymentAdjustments.get(payment.fromUserId) ?? 0) + payment.monto);
+      paymentAdjustments.set(payment.toUserId, (paymentAdjustments.get(payment.toUserId) ?? 0) - payment.monto);
+    }
 
     return trip.memberIds.map((userId) => {
       let pagado = 0;
@@ -56,7 +62,7 @@ export class BalanceService {
       }
       pagado = this.round(pagado);
       parte = this.round(parte);
-      return { userId, pagado, parte, neto: this.round(pagado - parte) };
+      return { userId, pagado, parte, neto: this.round(pagado - parte + (paymentAdjustments.get(userId) ?? 0)) };
     });
   }
 
