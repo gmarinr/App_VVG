@@ -11,18 +11,18 @@ Incluye además gestión de amigos, mensajes directos (DM) y chats de grupo auto
 ## ✨ Funcionalidades
 
 - **Viajes y Salidas** — crea actividades, invita amigos y registra gastos.
-- **Gastos** — cada gasto guarda quién pagó, el monto y quiénes participaron; se divide en partes iguales entre los participantes.
+- **Gastos** — cada gasto guarda quién pagó, el monto y quiénes participaron. Soporta 4 métodos de reparto: partes iguales, monto exacto, porcentaje y ponderado.
 - **Balance automático** — el motor calcula el neto de cada persona y las liquidaciones mínimas (quién paga a quién).
 - **Menú principal** — viaje actual, balances por viaje, pagos pendientes por persona y gráfico de gastos.
 - **Detalle de viaje** — pestañas Detalles · Balance · Fotos · Ajustes (finalizar viaje, editar, agregar/quitar participantes).
-- **Fotos** — galería compartida por viaje, agrupada por fecha.
+- **Fotos** — galería compartida por viaje, agrupada por fecha (almacenadas en Supabase Storage).
 - **Social** — amigos, perfiles, chats directos y grupos por viaje/salida.
 
 ## 🛠️ Stack
 
 - [Ionic 8](https://ionicframework.com/) + [Angular 20](https://angular.dev/) (standalone components, signals)
 - [Capacitor 8](https://capacitorjs.com/) para empaquetado móvil
-- **Persistencia actual:** `localStorage` (local-first). **Supabase está pendiente de integración.**
+- **Backend:** [Supabase](https://supabase.com/) — PostgreSQL + Auth (JWT, RLS) + Storage + REST autogenerada (PostgREST). La seguridad la aplica la base de datos vía Row-Level Security sobre `auth.uid()`.
 
 ## 🚀 Cómo ejecutar
 
@@ -41,39 +41,57 @@ npm run build   # build de producción
 npm test        # tests unitarios (Karma)
 ```
 
-### Cuenta de demostración
+> Necesitas un proyecto de Supabase configurado (URL + anon key en `src/environments/environment.ts`) y el esquema de `diseno/vvg_supabase_schema.sql` aplicado.
 
-La app arranca con datos de ejemplo (un viaje activo, una salida pasada, gastos, amigos y chats):
+### Cuenta de demostración
 
 ```
 Correo:      demo@vvg.app
 Contraseña:  1234
 ```
 
-En **Cuenta → Reiniciar datos de demo** puedes restaurar el ejemplo en cualquier momento.
-
 ## 📂 Estructura
 
 ```
 src/app/
 ├── models/        # Interfaces de dominio (User, Trip, Expense, Chat...)
-├── services/      # storage, data (CRUD + seed), auth, balance (motor de cálculo)
+├── services/      # supabase (cliente), data (CRUD), auth (Auth real), balance (motor de cálculo)
 ├── shared/        # Componentes/pipes reutilizables (avatar, money, bar-chart, amount-card)
-├── guards/        # authGuard
+├── guards/        # authGuard (async: espera la sesión de Supabase)
 └── pages/         # Vistas (login, dashboard, history, trip-detail, chat, account...)
 ```
 
-La capa de datos está aislada en `services/`, de modo que migrar a Supabase implica reemplazar `storage`, `data` y `auth` sin tocar las vistas ni el motor de balances.
+Las páginas hablan con `data.service`/`auth.service`, nunca con el cliente Supabase directamente. El motor de balances (`balance.service`) es puro y lee de los signals.
 
 ## 🗺️ Roadmap
 
-- [X] Integración con **Supabase** (base de datos + Auth real).
-- [X] División de gastos **ponderada** (porcentajes o montos exactos), hoy solo partes iguales.
-- [ ] Marcar pagos como realizados / liquidados.
-- [X] Subida real de fotos a almacenamiento en la nube.
-- [ ] Notificaciones de mensajes no leídos y estado de presencia.
-- [ ] Logo definitivo de la app.
+Hecho:
+
+- [X] Integración con **Supabase** (base de datos + Auth real + RLS).
+- [X] División de gastos en 4 métodos (partes iguales, exacto, porcentaje, ponderado).
+- [X] Subida real de fotos a almacenamiento en la nube (Supabase Storage).
+
+Pendiente (técnico):
+
+- [ ] Marcar pagos como realizados / liquidados (tablas `payments`/`trip_invites` listas, falta UI).
+- [ ] Notificaciones de mensajes no leídos y estado de presencia (realtime).
+- [ ] Logo definitivo de la app y `appId` propio (hoy `io.ionic.starter`).
+
+Futuras funcionalidades:
+
+- [ ] Cambiar tipo de moneda.
+- [ ] Adjuntar fotos a un gasto.
+- [ ] Confirmación de amistad (solicitud → aceptar/rechazar).
+- [ ] Confirmación de viaje/salida (que el invitado acepte unirse).
+- [ ] Link de invitación a un viaje/salida.
+- [ ] Descargar fotos de la galería al dispositivo.
+- [ ] Validar que no se creen más de dos perfiles con el mismo nombre.
+- [ ] Buscar usuarios por correo.
+- [ ] Filtro de viajes/salidas activos vs. archivados.
+- [ ] Mayor personalización de perfil, incluida foto de perfil.
+- [ ] Calificar salida (por definir).
+- [ ] Mostrar en el perfil de otra persona cuánto le debes / te debe.
 
 ## 📌 Estado
 
-MVP funcional en local. Sin backend todavía; pensado para validar flujos y UI antes de conectar Supabase.
+MVP funcional end-to-end sobre Supabase (Auth + datos + Storage con RLS).
