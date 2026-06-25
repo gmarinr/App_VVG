@@ -34,13 +34,28 @@
 }
 
 .settle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   margin-bottom: 10px;
   padding: 12px 14px;
-  .flow { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; font-size: 0.85rem; }
+
+  .settle-row { display: flex; align-items: center; gap: 10px; }
+  .flow { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; font-size: 0.85rem; }
   .flow .vvg-neg { font-size: 1.05rem; }
+  .flow ion-badge { font-size: 0.65rem; }
+
+  &.is-saldada .flow > span:first-child { opacity: 0.65; }
+
+  .settle-actions {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(43, 45, 58, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    p { margin: 0; }
+    .confirm-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    ion-button { margin: 0; }
+  }
 }
 
 .bal, .member {

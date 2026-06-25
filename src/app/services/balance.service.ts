@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { DataService } from './data.service';
-import { Expense, Settlement, UserBalance } from '../models/models';
+import { Expense, Settlement, SettlementStatus, Trip, UserBalance } from '../models/models';
 
 // Calcula balances y liquidaciones (quién le debe a quién).
 @Injectable({ providedIn: 'root' })
@@ -41,16 +41,28 @@ export class BalanceService {
     }
   }
 
-  // Balance neto de cada miembro dentro de un viaje.
+  // Balance neto de cada miembro dentro de un viaje (incluye los pagos confirmados).
   tripBalances(tripId: string): UserBalance[] {
+    return this.computeTripBalances(tripId, true);
+  }
+
+  // Balance "bruto" solo por los gastos (sin descontar pagos). Base para las
+  // liquidaciones con estado, que muestran la deuda original y su cobertura.
+  private tripBalancesGross(tripId: string): UserBalance[] {
+    return this.computeTripBalances(tripId, false);
+  }
+
+  private computeTripBalances(tripId: string, includePayments: boolean): UserBalance[] {
     const trip = this.data.getTrip(tripId);
     if (!trip) return [];
     const expenses = this.data.tripExpenses(tripId);
     const paymentAdjustments = new Map<string, number>();
 
-    for (const payment of this.data.tripPayments(tripId)) {
-      paymentAdjustments.set(payment.fromUserId, (paymentAdjustments.get(payment.fromUserId) ?? 0) + payment.monto);
-      paymentAdjustments.set(payment.toUserId, (paymentAdjustments.get(payment.toUserId) ?? 0) - payment.monto);
+    if (includePayments) {
+      for (const payment of this.data.tripPayments(tripId)) {
+        paymentAdjustments.set(payment.fromUserId, (paymentAdjustments.get(payment.fromUserId) ?? 0) + payment.monto);
+        paymentAdjustments.set(payment.toUserId, (paymentAdjustments.get(payment.toUserId) ?? 0) - payment.monto);
+      }
     }
 
     return trip.memberIds.map((userId) => {
@@ -78,7 +90,11 @@ export class BalanceService {
 
   // Liquidaciones mínimas dentro de un viaje (algoritmo voraz acreedor↔deudor).
   tripSettlements(tripId: string): Settlement[] {
-    const balances = this.tripBalances(tripId);
+    return this.settlementsFromBalances(this.tripBalances(tripId));
+  }
+
+  // Algoritmo voraz: empareja deudores con acreedores minimizando transferencias.
+  private settlementsFromBalances(balances: UserBalance[]): Settlement[] {
     const deudores = balances.filter((b) => b.neto < -0.01).map((b) => ({ id: b.userId, monto: -b.neto }));
     const acreedores = balances.filter((b) => b.neto > 0.01).map((b) => ({ id: b.userId, monto: b.neto }));
 
@@ -94,6 +110,25 @@ export class BalanceService {
       if (acreedores[j].monto <= 0.01) j++;
     }
     return settlements;
+  }
+
+  // Liquidaciones según los gastos (deuda original) con su cobertura por pagos confirmados.
+  // No desaparecen al saldarse: cada una lleva su estado (pendiente/parcial/saldada).
+  tripSettlementStatuses(tripId: string): SettlementStatus[] {
+    const gross = this.settlementsFromBalances(this.tripBalancesGross(tripId));
+    const confirmados = this.data.tripPayments(tripId);
+
+    return gross.map((s) => {
+      const pagado = this.round(
+        confirmados
+          .filter((p) => p.fromUserId === s.fromUserId && p.toUserId === s.toUserId)
+          .reduce((sum, p) => sum + p.monto, 0)
+      );
+      const pendiente = Math.max(0, this.round(s.monto - pagado));
+      const estado: SettlementStatus['estado'] =
+        pendiente <= 0.01 ? 'saldada' : pagado > 0.01 ? 'parcial' : 'pendiente';
+      return { fromUserId: s.fromUserId, toUserId: s.toUserId, monto: s.monto, pagado, pendiente, estado };
+    });
   }
 
   // Neto del usuario en un viaje (positivo: le deben; negativo: debe).
@@ -120,6 +155,45 @@ export class BalanceService {
     return [...map.entries()]
       .map(([otherId, monto]) => ({ otherId, monto: this.round(monto) }))
       .filter((x) => Math.abs(x.monto) > 0.01);
+  }
+
+  // ---------- Reparto de pagos (saldar deudas) ----------
+
+  // Liquidaciones por viaje donde `meId` le debe a `otherId`, con lo que aún falta por reportar
+  // (deuda del viaje menos los pagos pendientes ya reportados), ordenadas del viaje más antiguo al más nuevo.
+  personReportableTrips(meId: string, otherId: string): { tripId: string; monto: number }[] {
+    const result: { trip: Trip; monto: number }[] = [];
+    for (const trip of this.data.tripsForUser(meId)) {
+      const settlement = this.tripSettlements(trip.id).find(
+        (s) => s.fromUserId === meId && s.toUserId === otherId
+      );
+      if (!settlement) continue;
+      const yaReportado = this.data
+        .tripPendingPayments(trip.id)
+        .filter((p) => p.fromUserId === meId && p.toUserId === otherId)
+        .reduce((sum, p) => sum + p.monto, 0);
+      const restante = this.round(settlement.monto - yaReportado);
+      if (restante > 0.01) result.push({ trip, monto: restante });
+    }
+    return result
+      .sort((a, b) => +new Date(a.trip.fechaInicio) - +new Date(b.trip.fechaInicio))
+      .map((x) => ({ tripId: x.trip.id, monto: x.monto }));
+  }
+
+  // Reparte `monto` sobre las deudas de `meId` con `otherId`, del viaje más antiguo al más nuevo.
+  // Devuelve cuánto aplicar a cada viaje (para crear una fila de pago por viaje).
+  allocateOldestFirst(meId: string, otherId: string, monto: number): { tripId: string; monto: number }[] {
+    let restante = this.round(monto);
+    const out: { tripId: string; monto: number }[] = [];
+    for (const deuda of this.personReportableTrips(meId, otherId)) {
+      if (restante <= 0.01) break;
+      const aplicar = Math.min(deuda.monto, restante);
+      if (aplicar > 0.01) {
+        out.push({ tripId: deuda.tripId, monto: this.round(aplicar) });
+        restante = this.round(restante - aplicar);
+      }
+    }
+    return out;
   }
 
   // Gasto total por fecha (para el gráfico del menú principal), sumando todos los viajes.

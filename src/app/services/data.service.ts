@@ -559,6 +559,44 @@ export class DataService {
     return this.mapPayment(row);
   }
 
+  // Reporta varios pagos pendientes de una vez (deudor -> acreedor) y recarga una sola vez.
+  // Se usa al saldar desde el menu, donde un pago se reparte entre varios viajes.
+  async reportPayments(items: { tripId: string; fromUserId: string; toUserId: string; monto: number }[]): Promise<void> {
+    if (!items.length) return;
+    const { data: sessionData } = await this.supabase.client.auth.getSession();
+    const createdBy = sessionData.session?.user.id;
+    if (!createdBy) throw new Error('No hay sesion activa.');
+
+    const rows = items.map((it) => {
+      if (it.fromUserId === it.toUserId) throw new Error('El pago necesita dos usuarios distintos.');
+      if (!Number.isFinite(it.monto) || it.monto <= 0) throw new Error('El monto pagado debe ser mayor que cero.');
+      return {
+        trip_id: it.tripId,
+        from_user_id: it.fromUserId,
+        to_user_id: it.toUserId,
+        monto: it.monto,
+        status: 'pending' as PaymentStatus,
+        created_by: createdBy,
+        paid_at: null,
+      };
+    });
+
+    const { error } = await this.supabase.client.from('payments').insert(rows);
+    this.throwIfError(error);
+    await this.loadPayments();
+  }
+
+  // Confirma varios pagos pendientes (acreedor) de una vez y recarga una sola vez.
+  async confirmPayments(ids: string[]): Promise<void> {
+    if (!ids.length) return;
+    const { error } = await this.supabase.client
+      .from('payments')
+      .update({ status: 'paid', paid_at: new Date().toISOString() })
+      .in('id', ids);
+    this.throwIfError(error);
+    await this.loadPayments();
+  }
+
   async addPhoto(tripId: string, dataUrl: string, uploadedBy: string): Promise<void> {
     const id = this.uuid();
     const { blob, extension, contentType } = this.dataUrlToBlob(dataUrl);

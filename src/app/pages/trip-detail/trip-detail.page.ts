@@ -5,14 +5,14 @@ import { ActivatedRoute, Router } from '@angular/router';
 import {
   IonContent, IonHeader, IonToolbar, IonTitle, IonButtons, IonBackButton,
   IonSegment, IonSegmentButton, IonLabel, IonIcon, IonButton, IonFab, IonFabButton,
-  IonItem, IonList, AlertController, ToastController,
+  IonItem, IonList, IonBadge, AlertController, ToastController,
 } from '@ionic/angular/standalone';
 import { AuthService } from '../../services/auth.service';
 import { DataService } from '../../services/data.service';
 import { BalanceService } from '../../services/balance.service';
 import { MoneyPipe } from '../../shared/money.pipe';
 import { AvatarComponent } from '../../shared/avatar.component';
-import { Expense, Settlement, Trip, User, UserBalance } from '../../models/models';
+import { Expense, Payment, SettlementStatus, Trip, User, UserBalance } from '../../models/models';
 
 type Seg = 'detalles' | 'balance' | 'fotos' | 'ajustes';
 
@@ -22,7 +22,7 @@ type Seg = 'detalles' | 'balance' | 'fotos' | 'ajustes';
   imports: [
     CommonModule, FormsModule, IonContent, IonHeader, IonToolbar, IonTitle, IonButtons,
     IonBackButton, IonSegment, IonSegmentButton, IonLabel, IonIcon, IonButton, IonFab,
-    IonFabButton, IonItem, IonList, MoneyPipe, AvatarComponent,
+    IonFabButton, IonItem, IonList, IonBadge, MoneyPipe, AvatarComponent,
   ],
   templateUrl: './trip-detail.page.html',
   styleUrls: ['./trip-detail.page.scss'],
@@ -102,12 +102,116 @@ export class TripDetailPage {
     return this.balance.tripBalances(this.tripId);
   }
 
-  get settlements(): Settlement[] {
-    return this.balance.tripSettlements(this.tripId);
+  // Liquidaciones con estado (no desaparecen al saldarse: muestran pendiente/parcial/saldada).
+  get settlements(): SettlementStatus[] {
+    return this.balance.tripSettlementStatuses(this.tripId);
+  }
+
+  // Pagos confirmados del viaje (historial que no se borra).
+  get pagosRealizados(): Payment[] {
+    return this.data.tripPayments(this.tripId);
   }
 
   user(id: string): User | undefined {
     return this.data.getUser(id);
+  }
+
+  // ---------- Pagos del viaje (saldar liquidaciones) ----------
+  private get pendingPayments(): Payment[] {
+    return this.data.tripPendingPayments(this.tripId);
+  }
+
+  debeYo(s: SettlementStatus): boolean {
+    return !!this.me && s.fromUserId === this.me.id;
+  }
+
+  meDeben(s: SettlementStatus): boolean {
+    return !!this.me && s.toUserId === this.me.id;
+  }
+
+  // Cuánto puedo reportar todavía en esta liquidación (pendiente menos pagos ya reportados sin confirmar).
+  reportablePagar(s: SettlementStatus): number {
+    if (!this.me) return 0;
+    const ya = this.pendingPayments
+      .filter((p) => p.fromUserId === this.me!.id && p.toUserId === s.toUserId)
+      .reduce((sum, p) => sum + p.monto, 0);
+    return Math.max(0, this.round(s.pendiente - ya));
+  }
+
+  estadoLabel(s: SettlementStatus): string {
+    return s.estado === 'saldada' ? 'Saldada' : s.estado === 'parcial' ? 'Parcial' : 'Pendiente';
+  }
+
+  // Pagos que yo reporté y esperan confirmación del acreedor.
+  pagosEnEspera(s: SettlementStatus): Payment[] {
+    if (!this.me) return [];
+    return this.pendingPayments.filter((p) => p.fromUserId === this.me!.id && p.toUserId === s.toUserId);
+  }
+
+  // Pagos que el deudor reportó y yo (acreedor) debo confirmar.
+  pagosPorConfirmar(s: SettlementStatus): Payment[] {
+    if (!this.me) return [];
+    return this.pendingPayments.filter((p) => p.toUserId === this.me!.id && p.fromUserId === s.fromUserId);
+  }
+
+  async registrarPago(s: SettlementStatus) {
+    if (!this.me) return;
+    const restante = this.reportablePagar(s);
+    if (restante <= 0) {
+      await this.notify('No hay nada por reportar en esta liquidacion.', 'warning');
+      return;
+    }
+    const acreedor = this.user(s.toUserId)?.alias ?? 'la otra persona';
+    const alert = await this.alertCtrl.create({
+      header: 'Registrar pago',
+      message: `Le pagas a ${acreedor}. Pendiente ${this.formatMoney(restante)}.`,
+      inputs: [{ name: 'monto', type: 'number', value: restante, min: 0, attributes: { inputmode: 'decimal' } }],
+      buttons: [
+        { text: 'Cancelar', role: 'cancel' },
+        {
+          text: 'Registrar',
+          handler: async (d) => {
+            const monto = this.round(Number(d.monto));
+            if (!Number.isFinite(monto) || monto <= 0) {
+              await this.notify('Ingresa un monto mayor que cero.', 'warning');
+              return false;
+            }
+            if (monto - restante > 0.01) {
+              await this.notify('El monto no puede superar lo pendiente.', 'warning');
+              return false;
+            }
+            try {
+              await this.data.addPayment({ tripId: this.tripId, fromUserId: this.me!.id, toUserId: s.toUserId, monto });
+              await this.notify('Pago reportado. Esperando confirmacion.');
+              return true;
+            } catch (error) {
+              console.error(error);
+              await this.notify('No se pudo reportar el pago.', 'danger');
+              return false;
+            }
+          },
+        },
+      ],
+    });
+    await alert.present();
+  }
+
+  async confirmarPago(p: Payment) {
+    try {
+      await this.data.confirmPayment(p.id);
+      await this.notify('Pago confirmado.');
+    } catch (error) {
+      console.error(error);
+      await this.notify('No se pudo confirmar el pago.', 'danger');
+    }
+  }
+
+  private round(n: number): number {
+    return Math.round(n * 100) / 100;
+  }
+
+  private formatMoney(value: number): string {
+    return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);
   }
 
   get miembros(): User[] {

@@ -58,18 +58,65 @@
   <div *ngIf="seg === 'balance'">
     <h3 class="vvg-section-title">Quién debe a quién</h3>
     <div *ngIf="settlements.length; else saldado">
-      <div class="settle vvg-card" *ngFor="let s of settlements">
-        <app-avatar [user]="user(s.fromUserId)" [size]="38"></app-avatar>
-        <div class="flow">
-          <span><b>{{ user(s.fromUserId)?.alias }}</b> le debe a <b>{{ user(s.toUserId)?.alias }}</b></span>
-          <span class="vvg-neg">{{ s.monto | money }}</span>
+      <div class="settle vvg-card" *ngFor="let s of settlements" [class.is-saldada]="s.estado === 'saldada'">
+        <div class="settle-row">
+          <app-avatar [user]="user(s.fromUserId)" [size]="38"></app-avatar>
+          <div class="flow">
+            <span><b>{{ user(s.fromUserId)?.alias }}</b> le debe a <b>{{ user(s.toUserId)?.alias }}</b></span>
+            <ion-badge [color]="s.estado === 'saldada' ? 'success' : s.estado === 'parcial' ? 'warning' : 'medium'">
+              {{ estadoLabel(s) }}
+            </ion-badge>
+            <span *ngIf="s.estado !== 'saldada'" class="vvg-neg">{{ s.pendiente | money }}</span>
+            <span *ngIf="s.estado === 'saldada'" class="vvg-pos">{{ s.monto | money }} saldado</span>
+            <span *ngIf="s.estado === 'parcial'" class="vvg-muted small">
+              Abonado {{ s.pagado | money }} de {{ s.monto | money }}
+            </span>
+          </div>
+          <app-avatar [user]="user(s.toUserId)" [size]="38"></app-avatar>
         </div>
-        <app-avatar [user]="user(s.toUserId)" [size]="38"></app-avatar>
+
+        <!-- Acciones cuando la liquidación me involucra -->
+        <div
+          class="settle-actions"
+          *ngIf="(debeYo(s) && reportablePagar(s) > 0) || pagosEnEspera(s).length || pagosPorConfirmar(s).length"
+        >
+          <ion-button
+            *ngIf="debeYo(s) && reportablePagar(s) > 0"
+            size="small"
+            (click)="registrarPago(s)"
+          >
+            <ion-icon name="cash" slot="start"></ion-icon>
+            Registrar pago
+          </ion-button>
+
+          <p class="vvg-muted small" *ngFor="let p of pagosEnEspera(s)">
+            Esperando que {{ user(s.toUserId)?.alias }} confirme {{ p.monto | money }}.
+          </p>
+
+          <div class="confirm-row" *ngFor="let p of pagosPorConfirmar(s)">
+            <span class="vvg-muted small">{{ user(p.fromUserId)?.alias }} reportó {{ p.monto | money }}.</span>
+            <ion-button size="small" color="success" (click)="confirmarPago(p)">Confirmar</ion-button>
+          </div>
+        </div>
       </div>
     </div>
     <ng-template #saldado>
       <div class="empty"><ion-icon name="checkmark-circle"></ion-icon><p>Todo está saldado. 🎉</p></div>
     </ng-template>
+
+    <!-- Historial de pagos confirmados (no se borra) -->
+    <h3 class="vvg-section-title" *ngIf="pagosRealizados.length">Pagos realizados</h3>
+    <div class="settle vvg-card pago-hecho" *ngFor="let p of pagosRealizados">
+      <div class="settle-row">
+        <app-avatar [user]="user(p.fromUserId)" [size]="34"></app-avatar>
+        <div class="flow">
+          <span><b>{{ user(p.fromUserId)?.alias }}</b> pagó a <b>{{ user(p.toUserId)?.alias }}</b></span>
+          <span class="vvg-pos">{{ p.monto | money }}</span>
+          <span class="vvg-muted small">{{ fechaCorta(p.paidAt) }}</span>
+        </div>
+        <app-avatar [user]="user(p.toUserId)" [size]="34"></app-avatar>
+      </div>
+    </div>
 
     <h3 class="vvg-section-title">Balance por persona</h3>
     <div class="bal vvg-card" *ngFor="let b of balances">

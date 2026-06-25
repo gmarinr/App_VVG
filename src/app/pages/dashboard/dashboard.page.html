@@ -59,91 +59,94 @@
   </ng-template>
 
   <ion-button expand="block" class="confirm-payment-toggle" (click)="togglePaymentCard()">
-    <ion-icon name="cash-outline" slot="start"></ion-icon>
-    Confirmar Pago
+    <ion-icon name="cash" slot="start"></ion-icon>
+    Registrar o confirmar pagos
   </ion-button>
 
   <ion-card class="confirm-payment-card" *ngIf="showPaymentCard">
     <ion-card-header>
-      <ion-card-title>Pagos pendientes</ion-card-title>
+      <ion-card-title>Saldar cuentas</ion-card-title>
     </ion-card-header>
 
     <ion-card-content>
-      <ion-list *ngIf="pagosPendientes.length; else sinPagosConfirmables" lines="full">
-        <ion-item class="payment-item" *ngFor="let p of pagosPendientes; trackBy: trackPendingPayment">
-          <ion-grid class="payment-grid">
-            <ion-row class="ion-align-items-center">
-              <ion-col size="12" size-md="7">
-                <ion-label>
-                  <h2>{{ paymentTitle(p) }}</h2>
-                  <ion-badge [color]="p.direction === 'receive' ? 'success' : 'danger'">
-                    {{ p.direction === 'receive' ? 'Por recibir' : 'Por hacer' }}
-                  </ion-badge>
-                  <p>{{ p.trip.nombre }}</p>
-                  <p class="payment-amount" [class.receive]="p.direction === 'receive'" [class.pay]="p.direction === 'pay'">
-                    Pendiente {{ p.monto | money }}
-                  </p>
+      <ion-list *ngIf="personSettlements.length; else sinPagosConfirmables" lines="full">
+        <ion-item class="payment-item" *ngFor="let p of personSettlements; trackBy: trackPerson">
+          <ion-label>
+            <h2>{{ personTitle(p) }}</h2>
+            <ion-badge [color]="p.direction === 'receive' ? 'success' : 'danger'">
+              {{ p.direction === 'receive' ? 'Te deben' : 'Debes' }}
+            </ion-badge>
+            <p class="payment-amount" [class.receive]="p.direction === 'receive'" [class.pay]="p.direction === 'pay'">
+              {{ p.monto | money }}
+            </p>
 
-                  <ion-note color="warning" class="payment-note" *ngFor="let payment of p.confirmations">
-                    {{ confirmationMessage(p, payment) }}
-                    <ion-button
-                      size="small"
-                      fill="solid"
-                      color="success"
-                      (click)="confirmReportedPayment(payment)"
-                      [disabled]="savingPaymentId === payment.id"
-                    >
-                      <strong>Confirmar</strong>
+            <!-- Yo debo: registrar pago (total o parcial) repartido del viaje más antiguo al más nuevo -->
+            <ng-container *ngIf="p.direction === 'pay' && p.reportable > 0.01">
+              <ion-grid class="payment-controls">
+                <ion-row>
+                  <ion-col size="12">
+                    <ion-input
+                      aria-label="Monto pagado"
+                      class="payment-input"
+                      type="number"
+                      inputmode="decimal"
+                      min="0"
+                      [max]="p.reportable"
+                      placeholder="0"
+                      [ngModel]="paymentAmount(p.user.id)"
+                      (ngModelChange)="setPaymentAmount(p.user.id, $event)"
+                    ></ion-input>
+                  </ion-col>
+                </ion-row>
+                <ion-row>
+                  <ion-col size="6">
+                    <ion-button size="small" fill="outline" expand="block" (click)="setFullPayment(p)">Completo</ion-button>
+                  </ion-col>
+                  <ion-col size="6">
+                    <ion-button size="small" expand="block" (click)="settlePerson(p)" [disabled]="savingPaymentId === p.user.id">
+                      Registrar pago
                     </ion-button>
-                  </ion-note>
+                  </ion-col>
+                </ion-row>
+              </ion-grid>
+              <p class="vvg-muted small">Se aplica del viaje más antiguo al más nuevo.</p>
+            </ng-container>
 
-                  <ion-note color="medium" class="payment-note" *ngFor="let payment of p.waitingConfirmations">
-                    {{ waitingConfirmationMessage(p, payment) }}
-                  </ion-note>
-                </ion-label>
-              </ion-col>
+            <!-- Esperando que el otro confirme lo que reporté -->
+            <ion-note color="medium" class="payment-note" *ngFor="let payment of p.waiting">
+              {{ waitingMessage(p, payment) }}
+            </ion-note>
 
-              <ion-col size="12" size-md="5">
-                <ion-grid class="payment-controls">
-                  <ion-row>
-                    <ion-col size="12">
-                      <ion-input
-                        aria-label="Monto pagado"
-                        class="payment-input"
-                        type="number"
-                        inputmode="decimal"
-                        min="0"
-                        [max]="p.monto"
-                        placeholder="0"
-                        [ngModel]="paymentAmount(p)"
-                        (ngModelChange)="setPaymentAmount(p.id, $event)"
-                      ></ion-input>
-                    </ion-col>
-                  </ion-row>
-                  <ion-row>
-                    <ion-col size="6">
-                      <ion-button size="small" fill="outline" expand="block" (click)="setFullPayment(p)">Completo</ion-button>
-                    </ion-col>
-                    <ion-col size="6">
-                      <ion-button
-                        size="small"
-                        expand="block"
-                        (click)="confirmPayment(p)"
-                        [disabled]="savingPaymentId === p.id || p.waitingConfirmations.length > 0"
-                      >
-                        Guardar
-                      </ion-button>
-                    </ion-col>
-                  </ion-row>
-                </ion-grid>
-              </ion-col>
-            </ion-row>
-          </ion-grid>
+            <!-- El otro reportó pagos: confirmar -->
+            <ion-note color="warning" class="payment-note" *ngFor="let payment of p.toConfirm">
+              {{ reportedMessage(p, payment) }}
+              <ion-button
+                size="small"
+                fill="solid"
+                color="success"
+                (click)="confirmReportedPayment(payment)"
+                [disabled]="savingPaymentId === payment.id || savingPaymentId === p.user.id"
+              >
+                <strong>Confirmar</strong>
+              </ion-button>
+            </ion-note>
+            <ion-button
+              *ngIf="p.toConfirm.length > 1"
+              size="small"
+              expand="block"
+              color="success"
+              class="confirm-all"
+              (click)="confirmAll(p)"
+              [disabled]="savingPaymentId === p.user.id"
+            >
+              Confirmar todo
+            </ion-button>
+          </ion-label>
         </ion-item>
       </ion-list>
 
       <ng-template #sinPagosConfirmables>
-        <p class="vvg-muted">No tienes pagos pendientes para confirmar.</p>
+        <p class="vvg-muted">No tienes pagos pendientes.</p>
       </ng-template>
     </ion-card-content>
   </ion-card>

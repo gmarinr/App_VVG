@@ -13,17 +13,17 @@ import { BalanceService } from '../../services/balance.service';
 import { MoneyPipe } from '../../shared/money.pipe';
 import { BarChartComponent, BarDatum } from '../../shared/bar-chart.component';
 import { AmountCardComponent } from '../../shared/amount-card.component';
-import { Payment, Settlement, Trip, User } from '../../models/models';
+import { Payment, Trip, User } from '../../models/models';
 
-interface PendingPaymentItem {
-  id: string;
-  trip: Trip;
-  settlement: Settlement;
-  other: User;
+// Saldo agregado con otra persona (sumando todos los viajes).
+interface PersonSettlement {
+  user: User;
+  net: number;              // + me deben, - yo debo
   direction: 'receive' | 'pay';
-  monto: number;
-  confirmations: Payment[];
-  waitingConfirmations: Payment[];
+  monto: number;            // valor absoluto del neto
+  reportable: number;       // cuanto puedo reportar aun (solo si yo debo)
+  waiting: Payment[];       // pagos pendientes que yo reporte (espera confirmacion del otro)
+  toConfirm: Payment[];     // pagos pendientes que el otro reporto (yo confirmo)
 }
 
 @Component({
@@ -44,7 +44,7 @@ export class DashboardPage {
   showPaymentCard = false;
   savingPaymentId: string | null = null;
   private readonly paymentAmounts: Record<string, number | undefined> = {};
-  private readonly pendingPayments = computed(() => this.buildPendingPayments());
+  private readonly personSettlementsList = computed(() => this.buildPersonSettlements());
 
   constructor(
     private auth: AuthService,
@@ -80,8 +80,8 @@ export class DashboardPage {
       .filter((p) => p.user);
   }
 
-  get pagosPendientes(): PendingPaymentItem[] {
-    return this.pendingPayments();
+  get personSettlements(): PersonSettlement[] {
+    return this.personSettlementsList();
   }
 
   get chartData(): BarDatum[] {
@@ -89,35 +89,26 @@ export class DashboardPage {
     return this.balance.spendingByDate(this.me.id).map((d) => ({ label: this.shortDate(d.fecha), value: d.total }));
   }
 
-  private buildPendingPayments(): PendingPaymentItem[] {
+  // Saldo agregado por persona, sumando todos los viajes. Para cada persona con la que
+  // tengo deuda (o que me debe) reúno el neto, lo que aún puedo reportar y los pagos pendientes.
+  private buildPersonSettlements(): PersonSettlement[] {
     if (!this.me) return [];
-    const items: PendingPaymentItem[] = [];
+    const meId = this.me.id;
+    const pendientes = this.data.payments().filter((p) => p.status === 'pending');
+    const items: PersonSettlement[] = [];
 
-    for (const trip of this.data.tripsForUser(this.me.id)) {
-      const pendingPayments = this.data.tripPendingPayments(trip.id);
+    for (const b of this.balance.globalPersonBalances(meId)) {
+      const other = this.data.getUser(b.otherId);
+      if (!other) continue;
 
-      for (const settlement of this.balance.tripSettlements(trip.id)) {
-        if (settlement.fromUserId !== this.me.id && settlement.toUserId !== this.me.id) continue;
+      const direction = b.monto >= 0 ? 'receive' : 'pay';
+      const monto = Math.abs(b.monto);
+      const waiting = pendientes.filter((p) => p.fromUserId === meId && p.toUserId === b.otherId);
+      const toConfirm = pendientes.filter((p) => p.fromUserId === b.otherId && p.toUserId === meId);
+      const yaReportado = waiting.reduce((sum, p) => sum + p.monto, 0);
+      const reportable = direction === 'pay' ? Math.max(0, this.roundMoney(monto - yaReportado)) : 0;
 
-        const direction = settlement.toUserId === this.me.id ? 'receive' : 'pay';
-        const otherId = direction === 'receive' ? settlement.fromUserId : settlement.toUserId;
-        const other = this.data.getUser(otherId);
-        if (!other) continue;
-        const relatedPendingPayments = pendingPayments.filter(
-          (payment) => payment.fromUserId === settlement.fromUserId && payment.toUserId === settlement.toUserId
-        );
-
-        items.push({
-          id: `${trip.id}:${settlement.fromUserId}:${settlement.toUserId}`,
-          trip,
-          settlement,
-          other,
-          direction,
-          monto: settlement.monto,
-          confirmations: relatedPendingPayments.filter((payment) => payment.createdBy !== this.me!.id),
-          waitingConfirmations: relatedPendingPayments.filter((payment) => payment.createdBy === this.me!.id),
-        });
-      }
+      items.push({ user: other, net: b.monto, direction, monto, reportable, waiting, toConfirm });
     }
 
     return items.sort((a, b) => b.monto - a.monto);
@@ -154,56 +145,60 @@ export class DashboardPage {
     this.showPaymentCard = !this.showPaymentCard;
   }
 
-  paymentTitle(item: PendingPaymentItem): string {
-    return item.direction === 'receive' ? `${item.other.alias} te paga` : `Le pagas a ${item.other.alias}`;
+  personTitle(item: PersonSettlement): string {
+    return item.direction === 'receive' ? `${item.user.alias} te debe` : `Le debes a ${item.user.alias}`;
   }
 
-  trackPendingPayment(_index: number, item: PendingPaymentItem): string {
-    return item.id;
+  trackPerson(_index: number, item: PersonSettlement): string {
+    return item.user.id;
   }
 
-  paymentAmount(item: PendingPaymentItem): number | '' {
-    return this.paymentAmounts[item.id] ?? '';
+  paymentAmount(userId: string): number | '' {
+    return this.paymentAmounts[userId] ?? '';
   }
 
-  confirmationMessage(item: PendingPaymentItem, payment: Payment): string {
-    const reporter = this.data.getUser(payment.createdBy)?.alias ?? item.other.alias;
-    return `${reporter} reporto un pago de ${this.formatAmount(payment.monto)}.`;
+  reportedMessage(item: PersonSettlement, payment: Payment): string {
+    return `${item.user.alias} reportó un pago de ${this.formatAmount(payment.monto)}.`;
   }
 
-  waitingConfirmationMessage(item: PendingPaymentItem, payment: Payment): string {
-    return `Esperando confirmacion de ${item.other.alias} por ${this.formatAmount(payment.monto)}.`;
+  waitingMessage(item: PersonSettlement, payment: Payment): string {
+    return `Esperando que ${item.user.alias} confirme ${this.formatAmount(payment.monto)}.`;
   }
 
-  setPaymentAmount(itemId: string, value: number | string | null | undefined) {
+  setPaymentAmount(userId: string, value: number | string | null | undefined) {
     const amount = Number(value);
-    this.paymentAmounts[itemId] = Number.isFinite(amount) && amount > 0 ? amount : undefined;
+    this.paymentAmounts[userId] = Number.isFinite(amount) && amount > 0 ? amount : undefined;
   }
 
-  setFullPayment(item: PendingPaymentItem) {
-    this.paymentAmounts[item.id] = item.monto;
+  setFullPayment(item: PersonSettlement) {
+    this.paymentAmounts[item.user.id] = item.reportable;
   }
 
-  async confirmPayment(item: PendingPaymentItem) {
-    const amount = this.roundMoney(this.paymentAmounts[item.id] ?? 0);
+  // Reporta un pago contra el total con una persona, repartido del viaje más antiguo al más nuevo.
+  async settlePerson(item: PersonSettlement) {
+    if (!this.me) return;
+    const amount = this.roundMoney(this.paymentAmounts[item.user.id] ?? 0);
     if (amount <= 0) {
       await this.show('Ingresa un monto pagado mayor que cero.', 'warning');
       return;
     }
-    if (amount - item.monto > 0.01) {
-      await this.show('El monto pagado no puede superar el pendiente.', 'warning');
+    if (amount - item.reportable > 0.01) {
+      await this.show('El monto no puede superar lo pendiente por reportar.', 'warning');
       return;
     }
 
-    this.savingPaymentId = item.id;
+    const allocation = this.balance.allocateOldestFirst(this.me.id, item.user.id, amount);
+    if (!allocation.length) {
+      await this.show('No hay deudas por saldar con esta persona.', 'warning');
+      return;
+    }
+
+    this.savingPaymentId = item.user.id;
     try {
-      await this.data.addPayment({
-        tripId: item.trip.id,
-        fromUserId: item.settlement.fromUserId,
-        toUserId: item.settlement.toUserId,
-        monto: amount,
-      });
-      delete this.paymentAmounts[item.id];
+      await this.data.reportPayments(
+        allocation.map((a) => ({ tripId: a.tripId, fromUserId: this.me!.id, toUserId: item.user.id, monto: a.monto }))
+      );
+      delete this.paymentAmounts[item.user.id];
       await this.show('Pago reportado. Esperando confirmacion de la otra persona.', 'success');
     } catch (error) {
       console.error(error);
@@ -221,6 +216,21 @@ export class DashboardPage {
     } catch (error) {
       console.error(error);
       await this.show('No se pudo confirmar el pago.', 'danger');
+    } finally {
+      this.savingPaymentId = null;
+    }
+  }
+
+  // Confirma de una vez todos los pagos que la otra persona reportó.
+  async confirmAll(item: PersonSettlement) {
+    if (!item.toConfirm.length) return;
+    this.savingPaymentId = item.user.id;
+    try {
+      await this.data.confirmPayments(item.toConfirm.map((p) => p.id));
+      await this.show('Pagos confirmados.', 'success');
+    } catch (error) {
+      console.error(error);
+      await this.show('No se pudieron confirmar los pagos.', 'danger');
     } finally {
       this.savingPaymentId = null;
     }

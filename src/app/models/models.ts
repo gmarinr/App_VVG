@@ -107,3 +107,16 @@ export interface Settlement {
   toUserId: string; // quien debe recibir
   monto: number;
 }
+
+export type SettlementState = 'pendiente' | 'parcial' | 'saldada';
+
+// Liquidación "bruta" (según los gastos) con su cobertura por pagos confirmados.
+// Permite mostrar cuentas saldadas/parciales sin que desaparezcan del historial.
+export interface SettlementStatus {
+  fromUserId: string;
+  toUserId: string;
+  monto: number; // deuda original por los gastos
+  pagado: number; // confirmado de fromUser -> toUser
+  pendiente: number; // monto - pagado (>= 0)
+  estado: SettlementState;
+}
