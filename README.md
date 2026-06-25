@@ -73,7 +73,7 @@ Hecho:
 
 Pendiente (técnico):
 
-- [ ] Marcar pagos como realizados / liquidados (tablas `payments`/`trip_invites` listas, falta UI).
+- [ ] Liquidación de pagos: marcar desde el menú (total agregado) y desde el viaje. Ver [💸 Liquidación de pagos](#-liquidación-de-pagos-diseño--plan).
 - [ ] Notificaciones de mensajes no leídos y estado de presencia (realtime).
 - [ ] Logo definitivo de la app y `appId` propio (hoy `io.ionic.starter`).
 
@@ -91,6 +91,37 @@ Futuras funcionalidades:
 - [ ] Mayor personalización de perfil, incluida foto de perfil.
 - [ ] Calificar salida (por definir).
 - [ ] Mostrar en el perfil de otra persona cuánto le debes / te debe.
+
+## 💸 Liquidación de pagos (diseño + plan)
+
+> Los pagos se realizan **fuera de la app**; aquí solo se registra si están hechos o no.
+
+### Cómo funciona hoy
+
+- **Los pagos son por viaje**, nunca "globales": `payments.trip_id` es `NOT NULL` y referencia a `trip_members`. No existe una fila de pago sin viaje asociado.
+- **Un pago confirmado descuenta del balance del viaje**: en `balance.service.tripBalances()`, los pagos con `status='paid'` ajustan el neto (al deudor `+monto`, al acreedor `−monto`).
+- **El menú no guarda la deuda en ninguna tabla; la deriva de los viajes**: `dashboard → pagosPorPersona → balance.globalPersonBalances(me)` recorre los viajes del usuario, calcula las liquidaciones mínimas de cada uno (`tripSettlements`, que ya incluye los pagos confirmados) y las **agrega por persona**. Hay una única fuente de verdad (gastos + pagos por viaje); el menú es solo una vista agregada, por eso se sincroniza solo.
+- **Flujo de confirmación** (solo en el dashboard hoy): el deudor reporta un pago → fila `payments` con `status='pending'` (admite total o parcial ≤ pendiente); el acreedor lo confirma → `status='paid'` + `paid_at`. Mientras está `pending` no afecta al balance.
+
+### Decisiones de diseño
+
+- **Neteo por persona** entre viajes: si en un viaje le debes a Ana y en otro Ana te debe, se compensan; el pago salda el neto, asignándolo del viaje **más antiguo al más nuevo** (por `trip.fecha`).
+- **Se podrá marcar pagos en dos lugares**: desde el menú (total/parcial agregado por persona, con reparto automático entre viajes) y desde el viaje (pestaña Balance).
+
+### Plan de implementación
+
+1. **Motor — `balance.service.ts`**
+   - `personTripSettlements(me, otherId)` → liquidaciones **donde yo le debo** a esa persona, por viaje, ordenadas por `trip.fecha` (más antiguo primero). Los viajes donde *me debe* no se tocan (ya netean en el total).
+   - `allocateOldestFirst(me, otherId, monto)` → reparte un monto sobre esa lista y devuelve `[{ tripId, monto }]` hasta agotarlo. Convierte un "pago del total" en filas `payments` por viaje.
+2. **Datos — `data.service.ts`**
+   - `settleWithPerson({ otherId, monto })` → usa `allocateOldestFirst` y crea una fila `payments` (`pending`) por viaje, reutilizando `addPayment`.
+   - (opcional) `confirmPayments(ids[])` para confirmar varias de una vez.
+3. **UI menú — `dashboard.page`**: la amount-card por persona (hoy solo display) se vuelve accionable: botón "Registrar pago" con opción total o parcial → `settleWithPerson`. El reparto oldest-first es transparente para el usuario.
+4. **UI viaje — `trip-detail` (pestaña Balance)**: botón de reportar/confirmar pago por cada liquidación del viaje, reutilizando `addPayment`/`confirmPayment`. Como el menú deriva de los viajes, marcar aquí lo actualiza solo.
+
+**Sin cambios de esquema**: `payments` ya soporta status `pending`/`paid`, montos parciales y la relación por viaje. El flujo deudor-reporta → acreedor-confirma se mantiene en ambos puntos de entrada; solo el estado `paid` afecta al balance.
+
+> Nota: pagar el total desde el menú puede generar varias confirmaciones pendientes para el acreedor (una por viaje). Se mostrarán agrupadas por persona con un "confirmar todo".
 
 ## 📌 Estado
 
